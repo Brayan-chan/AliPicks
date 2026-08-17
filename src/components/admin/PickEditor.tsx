@@ -667,7 +667,11 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
   async function settlePick() {
     if (!pick) throw new Error("No se puede resolver un pick que todavía no existe.");
 
-    if (!TERMINAL_STATES.has(pick.event_state as EventState)) {
+    // Only an unlocked pre-match pick may persist a final definition immediately
+    // before settlement. Once predictions_locked_at exists we never route through
+    // save_structured_pick again, preserving partial live scores and the original
+    // prediction definition for the settlement audit trail.
+    if (!definitionLocked && !TERMINAL_STATES.has(pick.event_state as EventState)) {
       await saveStructuredPick(pick.event_state as EventState, true);
     }
 
@@ -710,7 +714,11 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
     try {
       if (pick && TERMINAL_STATES.has(draft.eventState)) {
         await settlePick();
-        toast.success(draft.eventState === "finished" ? "Partido cerrado y auditado" : "Partido cancelado y auditado");
+        toast.success(
+          draft.eventState === "finished"
+            ? "Partido cerrado y auditado"
+            : "Partido cancelado y auditado",
+        );
       } else {
         await saveStructuredPick();
         toast.success(pick ? "Pick actualizado" : "Pick creado correctamente");
@@ -756,7 +764,8 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
                 </p>
                 {pick?.predictions_locked_at && (
                   <p className="mt-2 text-[11px] text-muted-foreground">
-                    Bloqueadas: {new Intl.DateTimeFormat("es-MX", {
+                    Bloqueadas:{" "}
+                    {new Intl.DateTimeFormat("es-MX", {
                       dateStyle: "medium",
                       timeStyle: "short",
                     }).format(new Date(pick.predictions_locked_at))}
@@ -785,10 +794,14 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
                 disabled={definitionLocked}
                 onValueChange={(value) => changeSport(value as Sport)}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {Object.entries(SPORT_LABEL).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -826,7 +839,11 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
 
             <Field
               label={draft.eventState === "postponed" ? "Fecha original" : "Fecha y hora"}
-              hint={draft.eventState === "postponed" ? "Se conserva como referencia mientras está pospuesto." : ""}
+              hint={
+                draft.eventState === "postponed"
+                  ? "Se conserva como referencia mientras está pospuesto."
+                  : ""
+              }
             >
               <Input
                 type="datetime-local"
@@ -841,10 +858,14 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
                 value={draft.eventState}
                 onValueChange={(value) => changeEventState(value as EventState)}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {availableStates.map((value) => (
-                    <SelectItem key={value} value={value}>{EVENT_STATE_LABEL[value]}</SelectItem>
+                    <SelectItem key={value} value={value}>
+                      {EVENT_STATE_LABEL[value]}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -869,7 +890,10 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
                         placeholder="Motivo de la posposición"
                       />
                     </Field>
-                    <Field label="Nueva fecha y hora" hint="Déjala vacía si todavía está por confirmar.">
+                    <Field
+                      label="Nueva fecha y hora"
+                      hint="Déjala vacía si todavía está por confirmar."
+                    >
                       <Input
                         type="datetime-local"
                         value={draft.rescheduledFor}
@@ -877,7 +901,8 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
                       />
                     </Field>
                   </div>
-                  {!definitionLocked && (
+
+                  {pick?.event_state === "postponed" ? (
                     <div className="mt-4 flex justify-end">
                       <Button
                         type="button"
@@ -888,6 +913,11 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
                         <CalendarClock className="size-4" /> Reprogramar como próximo
                       </Button>
                     </div>
+                  ) : (
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      Guarda primero la posposición. La reprogramación se habilitará cuando el
+                      estado Pospuesto ya esté registrado en la base.
+                    </p>
                   )}
                 </div>
               </div>
@@ -897,7 +927,11 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Field
               label="Marcador real local"
-              hint={draft.eventState === "live" ? "Puedes registrar el marcador parcial." : "Déjalo vacío antes del partido."}
+              hint={
+                draft.eventState === "live"
+                  ? "Puedes registrar el marcador parcial."
+                  : "Déjalo vacío antes del partido."
+              }
             >
               <Input
                 type="number"
@@ -935,21 +969,52 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
             )}
         </EditorSection>
 
-        <EditorSection title="2. Probabilidades del modelo" description="La suma debe ser exactamente 100%.">
+        <EditorSection
+          title="2. Probabilidades del modelo"
+          description="La suma debe ser exactamente 100%."
+        >
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Local %">
-              <Input type="number" min={0} max={100} value={draft.probHome} onChange={(event) => set("probHome", event.target.value)} disabled={terminalPick} />
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={draft.probHome}
+                onChange={(event) => set("probHome", event.target.value)}
+                disabled={terminalPick}
+              />
             </Field>
             {draft.sport === "soccer" && (
               <Field label="Empate %">
-                <Input type="number" min={0} max={100} value={draft.probDraw} onChange={(event) => set("probDraw", event.target.value)} disabled={terminalPick} />
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={draft.probDraw}
+                  onChange={(event) => set("probDraw", event.target.value)}
+                  disabled={terminalPick}
+                />
               </Field>
             )}
             <Field label="Visitante %">
-              <Input type="number" min={0} max={100} value={draft.probAway} onChange={(event) => set("probAway", event.target.value)} disabled={terminalPick} />
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={draft.probAway}
+                onChange={(event) => set("probAway", event.target.value)}
+                disabled={terminalPick}
+              />
             </Field>
           </div>
-          <p className={cn("mt-3 text-xs font-semibold", probabilityTotal === 100 ? "text-success" : "text-destructive")}>Total: {probabilityTotal}%</p>
+          <p
+            className={cn(
+              "mt-3 text-xs font-semibold",
+              probabilityTotal === 100 ? "text-success" : "text-destructive",
+            )}
+          >
+            Total: {probabilityTotal}%
+          </p>
         </EditorSection>
 
         <EditorSection
@@ -959,7 +1024,10 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
           {definitionLocked && (
             <div className="mb-4 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-muted-foreground">
               <Lock className="mt-0.5 size-4 shrink-0" />
-              <p>La definición del modelo ya es inmutable. Solo los resultados del settlement pueden cambiar.</p>
+              <p>
+                La definición del modelo ya es inmutable. Solo los resultados del settlement pueden
+                cambiar.
+              </p>
             </div>
           )}
 
@@ -1037,21 +1105,44 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
           </div>
         </EditorSection>
 
-        <EditorSection title="4. Análisis" description="Explica por qué el modelo llega a estas proyecciones.">
-          <Textarea rows={8} value={draft.analysis} disabled={terminalPick} onChange={(event) => set("analysis", event.target.value)} placeholder="Explica por qué el modelo llega a estas proyecciones…" />
+        <EditorSection
+          title="4. Análisis"
+          description="Explica por qué el modelo llega a estas proyecciones."
+        >
+          <Textarea
+            rows={8}
+            value={draft.analysis}
+            disabled={terminalPick}
+            onChange={(event) => set("analysis", event.target.value)}
+            placeholder="Explica por qué el modelo llega a estas proyecciones…"
+          />
         </EditorSection>
 
-        <EditorSection title="5. Seis factores" description="Los factores documentan el contexto utilizado por el modelo.">
+        <EditorSection
+          title="5. Seis factores"
+          description="Los factores documentan el contexto utilizado por el modelo."
+        >
           <div className="grid gap-4 md:grid-cols-2">
             {draft.factors.map((factor, index) => (
-              <div key={factor.title} className="rounded-xl border border-border/70 bg-secondary/20 p-4" style={{ borderLeft: `3px solid ${factor.color}` }}>
+              <div
+                key={factor.title}
+                className="rounded-xl border border-border/70 bg-secondary/20 p-4"
+                style={{ borderLeft: `3px solid ${factor.color}` }}
+              >
                 <Label className="text-sm font-semibold">{factor.title}</Label>
                 <Textarea
                   className="mt-2"
                   rows={4}
                   disabled={terminalPick}
                   value={factor.text}
-                  onChange={(event) => set("factors", draft.factors.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item))}
+                  onChange={(event) =>
+                    set(
+                      "factors",
+                      draft.factors.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, text: event.target.value } : item,
+                      ),
+                    )
+                  }
                 />
               </div>
             ))}
@@ -1061,8 +1152,14 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
         <EditorSection title="6. Publicación" description="Configura acceso y visibilidad del pick.">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Acceso">
-              <Select value={draft.visibility} disabled={terminalPick} onValueChange={(value) => set("visibility", value as Draft["visibility"])}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={draft.visibility}
+                disabled={terminalPick}
+                onValueChange={(value) => set("visibility", value as Draft["visibility"])}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Acceso libre</SelectItem>
                   <SelectItem value="premium">Premium</SelectItem>
@@ -1070,26 +1167,72 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
               </Select>
             </Field>
             <Field label="Plan mínimo">
-              <Input type="number" min={0} max={3} disabled={terminalPick || draft.visibility === "free"} value={draft.visibility === "free" ? 0 : draft.minPlanTier} onChange={(event) => set("minPlanTier", Number(event.target.value))} />
+              <Input
+                type="number"
+                min={0}
+                max={3}
+                disabled={terminalPick || draft.visibility === "free"}
+                value={draft.visibility === "free" ? 0 : draft.minPlanTier}
+                onChange={(event) => set("minPlanTier", Number(event.target.value))}
+              />
             </Field>
             <Field label="Precio individual (centavos MXN)">
-              <Input type="number" min={0} disabled={terminalPick} value={draft.priceCents} onChange={(event) => set("priceCents", Number(event.target.value))} />
+              <Input
+                type="number"
+                min={0}
+                disabled={terminalPick}
+                value={draft.priceCents}
+                onChange={(event) => set("priceCents", Number(event.target.value))}
+              />
             </Field>
             <Field label="Etiquetas">
-              <Input disabled={terminalPick} value={draft.tags} onChange={(event) => set("tags", event.target.value)} placeholder="champions, value, goles" />
+              <Input
+                disabled={terminalPick}
+                value={draft.tags}
+                onChange={(event) => set("tags", event.target.value)}
+                placeholder="champions, value, goles"
+              />
             </Field>
           </div>
           <div className="mt-4 flex flex-wrap gap-5">
-            <CheckField label="Publicado" checked={draft.isPublished} disabled={terminalPick} onChange={(value) => set("isPublished", value)} />
-            <CheckField label="Destacado" checked={draft.featured} disabled={terminalPick} onChange={(value) => set("featured", value)} />
-            <CheckField label="Recomendado" checked={draft.recommended} disabled={terminalPick} onChange={(value) => set("recommended", value)} />
+            <CheckField
+              label="Publicado"
+              checked={draft.isPublished}
+              disabled={terminalPick}
+              onChange={(value) => set("isPublished", value)}
+            />
+            <CheckField
+              label="Destacado"
+              checked={draft.featured}
+              disabled={terminalPick}
+              onChange={(value) => set("featured", value)}
+            />
+            <CheckField
+              label="Recomendado"
+              checked={draft.recommended}
+              disabled={terminalPick}
+              onChange={(value) => set("recommended", value)}
+            />
           </div>
         </EditorSection>
 
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => navigate({ to: "/admin" })}>Cancelar</Button>
-          <Button onClick={save} disabled={busy} className="min-w-40 bg-gradient-brand text-primary-foreground">
-            <Save className="size-4" /> {busy ? "Guardando…" : canResolve && pick ? "Guardar cierre" : pick ? "Guardar cambios" : "Crear pick"}
+          <Button variant="secondary" onClick={() => navigate({ to: "/admin" })}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={save}
+            disabled={busy}
+            className="min-w-40 bg-gradient-brand text-primary-foreground"
+          >
+            <Save className="size-4" />{" "}
+            {busy
+              ? "Guardando…"
+              : canResolve && pick
+                ? "Guardar cierre"
+                : pick
+                  ? "Guardar cambios"
+                  : "Crear pick"}
           </Button>
         </div>
       </div>
@@ -1100,21 +1243,34 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
           <div className="mt-5 flex items-center gap-3">
             <TeamPreview team={selectedHome} fallback="Local" />
             <div className="shrink-0 text-center">
-              <p className="font-display text-2xl font-extrabold">{draft.homeScore || 0} - {draft.awayScore || 0}</p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{EVENT_STATE_LABEL[draft.eventState]}</p>
+              <p className="font-display text-2xl font-extrabold">
+                {draft.homeScore || 0} - {draft.awayScore || 0}
+              </p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {EVENT_STATE_LABEL[draft.eventState]}
+              </p>
             </div>
             <TeamPreview team={selectedAway} fallback="Visitante" />
           </div>
           <div className="mt-5 rounded-xl bg-secondary/40 p-4">
-            <p className="text-xs text-muted-foreground">{selectedLeague?.name ?? "Selecciona una liga"}</p>
+            <p className="text-xs text-muted-foreground">
+              {selectedLeague?.name ?? "Selecciona una liga"}
+            </p>
             <p className="mt-3 text-sm font-semibold">Primary Pick</p>
-            <p className="mt-1 text-sm text-muted-foreground">{draft.primarySelection || "Sin selección"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {draft.primarySelection || "Sin selección"}
+            </p>
             <p className="mt-3 text-sm font-semibold">Secondary Pick</p>
-            <p className="mt-1 text-sm text-muted-foreground">{draft.secondarySelection || "Sin selección"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {draft.secondarySelection || "Sin selección"}
+            </p>
           </div>
           <div className="mt-4 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-muted-foreground">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-            <p>Primary Score y Alt Score son proyecciones analíticas. No muestran cuota ni etiqueta de riesgo.</p>
+            <p>
+              Primary Score y Alt Score son proyecciones analíticas. No muestran cuota ni etiqueta
+              de riesgo.
+            </p>
           </div>
         </div>
       </aside>
@@ -1122,7 +1278,15 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
   );
 }
 
-function EditorSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+function EditorSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="surface-card rounded-2xl border border-border/70 p-5 sm:p-6">
       <div className="mb-5">
@@ -1134,7 +1298,15 @@ function EditorSection({ title, description, children }: { title: string; descri
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <Label className="text-xs text-muted-foreground">{label}</Label>
@@ -1144,22 +1316,61 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-function CheckField({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void }) {
+function CheckField({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (value: boolean) => void;
+}) {
   return (
     <label className={cn("flex items-center gap-2 text-sm", disabled && "opacity-60")}>
-      <Checkbox disabled={disabled} checked={checked} onCheckedChange={(value) => onChange(Boolean(value))} /> {label}
+      <Checkbox
+        disabled={disabled}
+        checked={checked}
+        onCheckedChange={(value) => onChange(Boolean(value))}
+      />{" "}
+      {label}
     </label>
   );
 }
 
-function EntityPicker<T extends { id: string }>({ label, placeholder, value, options, getLabel, image, onChange, disabled }: { label: string; placeholder: string; value: string; options: T[]; getLabel: (item: T) => string; image?: (item: T) => string | null; onChange: (id: string) => void; disabled: boolean }) {
+function EntityPicker<T extends { id: string }>({
+  label,
+  placeholder,
+  value,
+  options,
+  getLabel,
+  image,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  options: T[];
+  getLabel: (item: T) => string;
+  image?: (item: T) => string | null;
+  onChange: (id: string) => void;
+  disabled: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const selected = options.find((item) => item.id === value);
   return (
     <Field label={label}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" role="combobox" disabled={disabled} className="w-full justify-between font-normal">
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            disabled={disabled}
+            className="w-full justify-between font-normal"
+          >
             {selected ? getLabel(selected) : placeholder}
             <ChevronsUpDown className="size-4 opacity-50" />
           </Button>
@@ -1171,10 +1382,28 @@ function EntityPicker<T extends { id: string }>({ label, placeholder, value, opt
               <CommandEmpty>No se encontraron resultados.</CommandEmpty>
               <CommandGroup>
                 {options.map((item) => (
-                  <CommandItem key={item.id} value={`${getLabel(item)} ${item.id}`} onSelect={() => { onChange(item.id); setOpen(false); }}>
-                    {image?.(item) ? <img src={image(item)!} alt="" className="size-5 object-contain" /> : <span className="grid size-5 place-items-center rounded-full bg-secondary text-[9px] font-bold">{getLabel(item).slice(0, 2).toUpperCase()}</span>}
+                  <CommandItem
+                    key={item.id}
+                    value={`${getLabel(item)} ${item.id}`}
+                    onSelect={() => {
+                      onChange(item.id);
+                      setOpen(false);
+                    }}
+                  >
+                    {image?.(item) ? (
+                      <img src={image(item)!} alt="" className="size-5 object-contain" />
+                    ) : (
+                      <span className="grid size-5 place-items-center rounded-full bg-secondary text-[9px] font-bold">
+                        {getLabel(item).slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
                     <span className="flex-1">{getLabel(item)}</span>
-                    <Check className={cn("size-4", value === item.id ? "opacity-100" : "opacity-0")} />
+                    <Check
+                      className={cn(
+                        "size-4",
+                        value === item.id ? "opacity-100" : "opacity-0",
+                      )}
+                    />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -1186,31 +1415,124 @@ function EntityPicker<T extends { id: string }>({ label, placeholder, value, opt
   );
 }
 
-function BetPrediction({ title, market, selection, risk, confidence, odds, result, definitionDisabled, resultDisabled, onMarket, onSelection, onRisk, onConfidence, onOdds, onResult }: { title: string; market: PickType; selection: string; risk: RiskLevel; confidence: string; odds: string; result: PickStatus; definitionDisabled: boolean; resultDisabled: boolean; onMarket: (value: PickType) => void; onSelection: (value: string) => void; onRisk: (value: RiskLevel) => void; onConfidence: (value: string) => void; onOdds: (value: string) => void; onResult: (value: PickStatus) => void }) {
+function BetPrediction({
+  title,
+  market,
+  selection,
+  risk,
+  confidence,
+  odds,
+  result,
+  definitionDisabled,
+  resultDisabled,
+  onMarket,
+  onSelection,
+  onRisk,
+  onConfidence,
+  onOdds,
+  onResult,
+}: {
+  title: string;
+  market: PickType;
+  selection: string;
+  risk: RiskLevel;
+  confidence: string;
+  odds: string;
+  result: PickStatus;
+  definitionDisabled: boolean;
+  resultDisabled: boolean;
+  onMarket: (value: PickType) => void;
+  onSelection: (value: string) => void;
+  onRisk: (value: RiskLevel) => void;
+  onConfidence: (value: string) => void;
+  onOdds: (value: string) => void;
+  onResult: (value: PickStatus) => void;
+}) {
   return (
     <div className="rounded-xl border border-border/70 bg-secondary/20 p-4">
       <p className="font-display font-bold">{title}</p>
       <div className="mt-4 space-y-3">
         <Field label="Mercado">
-          <Select value={market} disabled={definitionDisabled} onValueChange={(value) => onMarket(value as PickType)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{MARKET_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+          <Select
+            value={market}
+            disabled={definitionDisabled}
+            onValueChange={(value) => onMarket(value as PickType)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MARKET_OPTIONS.map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         </Field>
-        <Field label="Selección"><Input disabled={definitionDisabled} value={selection} onChange={(event) => onSelection(event.target.value)} placeholder="Ej. Manchester City gana" /></Field>
+        <Field label="Selección">
+          <Input
+            disabled={definitionDisabled}
+            value={selection}
+            onChange={(event) => onSelection(event.target.value)}
+            placeholder="Ej. Manchester City gana"
+          />
+        </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Riesgo">
-            <Select value={risk} disabled={definitionDisabled} onValueChange={(value) => onRisk(value as RiskLevel)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(RISK_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+            <Select
+              value={risk}
+              disabled={definitionDisabled}
+              onValueChange={(value) => onRisk(value as RiskLevel)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(RISK_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </Field>
-          <Field label="Confianza %"><Input type="number" min={0} max={100} disabled={definitionDisabled} value={confidence} onChange={(event) => onConfidence(event.target.value)} /></Field>
-          <Field label="Cuota"><Input type="number" min={1.01} step="0.01" disabled={definitionDisabled} value={odds} onChange={(event) => onOdds(event.target.value)} /></Field>
+          <Field label="Confianza %">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              disabled={definitionDisabled}
+              value={confidence}
+              onChange={(event) => onConfidence(event.target.value)}
+            />
+          </Field>
+          <Field label="Cuota">
+            <Input
+              type="number"
+              min={1.01}
+              step="0.01"
+              disabled={definitionDisabled}
+              value={odds}
+              onChange={(event) => onOdds(event.target.value)}
+            />
+          </Field>
           <Field label="Resultado">
-            <Select value={result} disabled={resultDisabled} onValueChange={(value) => onResult(value as PickStatus)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(STATUS_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+            <Select
+              value={result}
+              disabled={resultDisabled}
+              onValueChange={(value) => onResult(value as PickStatus)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </Field>
         </div>
@@ -1219,25 +1541,82 @@ function BetPrediction({ title, market, selection, risk, confidence, odds, resul
   );
 }
 
-function ScorePrediction({ title, home, away, confidence, result, definitionDisabled, onHome, onAway, onConfidence }: { title: string; home: string; away: string; confidence: string; result: PickStatus; definitionDisabled: boolean; onHome: (value: string) => void; onAway: (value: string) => void; onConfidence: (value: string) => void }) {
+function ScorePrediction({
+  title,
+  home,
+  away,
+  confidence,
+  result,
+  definitionDisabled,
+  onHome,
+  onAway,
+  onConfidence,
+}: {
+  title: string;
+  home: string;
+  away: string;
+  confidence: string;
+  result: PickStatus;
+  definitionDisabled: boolean;
+  onHome: (value: string) => void;
+  onAway: (value: string) => void;
+  onConfidence: (value: string) => void;
+}) {
   return (
     <div className="rounded-xl border border-border/70 bg-secondary/20 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-display font-bold">{title}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">Proyección analítica · sin riesgo · sin cuota</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Proyección analítica · sin riesgo · sin cuota
+          </p>
         </div>
         <Select value={result} disabled>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>{Object.entries(STATUS_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(STATUS_LABEL).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </div>
       <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-end gap-3">
-        <Field label="Local"><Input type="number" min={0} disabled={definitionDisabled} value={home} onChange={(event) => onHome(event.target.value)} /></Field>
+        <Field label="Local">
+          <Input
+            type="number"
+            min={0}
+            disabled={definitionDisabled}
+            value={home}
+            onChange={(event) => onHome(event.target.value)}
+          />
+        </Field>
         <span className="pb-2 font-display text-xl font-bold">-</span>
-        <Field label="Visitante"><Input type="number" min={0} disabled={definitionDisabled} value={away} onChange={(event) => onAway(event.target.value)} /></Field>
+        <Field label="Visitante">
+          <Input
+            type="number"
+            min={0}
+            disabled={definitionDisabled}
+            value={away}
+            onChange={(event) => onAway(event.target.value)}
+          />
+        </Field>
       </div>
-      <div className="mt-3"><Field label="Confianza del modelo %"><Input type="number" min={0} max={100} disabled={definitionDisabled} value={confidence} onChange={(event) => onConfidence(event.target.value)} /></Field></div>
+      <div className="mt-3">
+        <Field label="Confianza del modelo %">
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            disabled={definitionDisabled}
+            value={confidence}
+            onChange={(event) => onConfidence(event.target.value)}
+          />
+        </Field>
+      </div>
     </div>
   );
 }
@@ -1247,7 +1626,13 @@ function TeamPreview({ team, fallback }: { team: Team | null; fallback: string }
   return (
     <div className="min-w-0 flex-1 text-center">
       <div className="mx-auto grid size-14 place-items-center overflow-hidden rounded-full border border-border bg-background">
-        {team?.logo_url ? <img src={team.logo_url} alt="" className="size-10 object-contain" /> : <span className="font-display text-sm font-bold text-muted-foreground">{name.slice(0, 2).toUpperCase()}</span>}
+        {team?.logo_url ? (
+          <img src={team.logo_url} alt="" className="size-10 object-contain" />
+        ) : (
+          <span className="font-display text-sm font-bold text-muted-foreground">
+            {name.slice(0, 2).toUpperCase()}
+          </span>
+        )}
       </div>
       <p className="mt-2 truncate text-sm font-semibold">{name}</p>
     </div>
