@@ -103,34 +103,25 @@
   --sidebar-accent-foreground: oklch(0.32 0.05 158);
   --sidebar-border: oklch(0.918 0.007 150);
   --sidebar-ring: oklch(0.42 0.085 158);
-
-  /* Acento de marca AliPicks: verde profundo */
   --gold-1: oklch(0.52 0.1 160);
   --gold-2: oklch(0.42 0.085 158);
   --gold-3: oklch(0.33 0.07 158);
   --gradient-brand: linear-gradient(135deg, var(--gold-1), var(--gold-2) 55%, var(--gold-3));
   --gradient-surface: linear-gradient(180deg, oklch(1 0 0), oklch(0.995 0.003 150));
   --gradient-win: linear-gradient(135deg, oklch(0.52 0.1 160), oklch(0.42 0.085 158));
-  --shadow-card:
-    0 1px 2px 0 oklch(0.24 0.02 155 / 0.04), 0 8px 24px -18px oklch(0.24 0.02 155 / 0.35);
-  --shadow-glow:
-    0 1px 2px 0 oklch(0.24 0.02 155 / 0.06), 0 14px 34px -22px oklch(0.42 0.085 158 / 0.5);
+  --shadow-card: 0 1px 2px 0 oklch(0.24 0.02 155 / 0.04), 0 8px 24px -18px oklch(0.24 0.02 155 / 0.35);
+  --shadow-glow: 0 1px 2px 0 oklch(0.24 0.02 155 / 0.06), 0 14px 34px -22px oklch(0.42 0.085 158 / 0.5);
 }
 
 @layer base {
-  * {
-    border-color: var(--color-border);
-  }
+  * { border-color: var(--color-border); }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
-  h1,
-  h2,
-  h3,
-  .font-display {
+  h1, h2, h3, .font-display {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
   }
@@ -141,26 +132,17 @@
   box-shadow: var(--shadow-card);
   border-color: var(--border);
 }
-
 @utility surface-elevated {
   background-color: var(--card);
   box-shadow: var(--shadow-card);
   border: 1px solid var(--border);
 }
-
 @utility surface-quiet {
   background-color: oklch(0.975 0.006 150);
   border: 1px solid var(--border);
 }
-
-@utility hairline-gold {
-  border: 1px solid oklch(0.42 0.085 158 / 0.28);
-}
-
-@utility text-gold {
-  color: var(--gold-2);
-}
-
+@utility hairline-gold { border: 1px solid oklch(0.42 0.085 158 / 0.28); }
+@utility text-gold { color: var(--gold-2); }
 @utility eyebrow {
   font-size: 0.68rem;
   letter-spacing: 0.16em;
@@ -168,44 +150,127 @@
   font-weight: 600;
   color: oklch(0.53 0.014 155);
 }
+@utility text-gradient-brand { color: var(--gold-2); }
+@utility bg-gradient-brand { background-image: var(--gradient-brand); }
+@utility glow-brand { box-shadow: var(--shadow-glow); }
 
-@utility text-gradient-brand {
-  color: var(--gold-2);
+/* Admin Pick Studio ------------------------------------------------------- */
+.admin-editor-page {
+  position: relative;
 }
 
-@utility bg-gradient-brand {
-  background-image: var(--gradient-brand);
+.admin-editor-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 8%, oklch(0.72 0.07 158 / 0.11), transparent 24rem),
+    radial-gradient(circle at 88% 20%, oklch(0.62 0.055 225 / 0.07), transparent 28rem),
+    linear-gradient(180deg, oklch(0.992 0.004 150), var(--background));
 }
 
-@utility glow-brand {
-  box-shadow: var(--shadow-glow);
+.admin-editor-hero {
+  position: relative;
+  background:
+    linear-gradient(120deg, oklch(1 0 0 / 0.94), oklch(0.975 0.012 155 / 0.92)),
+    var(--card);
+  box-shadow: 0 24px 70px -48px oklch(0.25 0.04 158 / 0.55);
+}
+
+.admin-editor-hero::after {
+  content: "";
+  position: absolute;
+  width: 22rem;
+  height: 22rem;
+  right: -8rem;
+  top: -13rem;
+  border-radius: 999px;
+  border: 1px solid oklch(0.42 0.085 158 / 0.14);
+  box-shadow:
+    0 0 0 38px oklch(0.42 0.085 158 / 0.035),
+    0 0 0 78px oklch(0.42 0.085 158 / 0.025);
+}
+
+.admin-editor-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  background: oklch(0.42 0.085 158 / 0.08);
+  border: 1px solid oklch(0.42 0.085 158 / 0.13);
+  color: var(--gold-3);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.admin-editor-status-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  border: 1px solid oklch(0.42 0.085 158 / 0.16);
+  background: oklch(1 0 0 / 0.78);
+  padding: 0.55rem 0.85rem;
+  color: oklch(0.34 0.04 158);
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 10px 28px -22px oklch(0.24 0.04 158 / 0.5);
+  backdrop-filter: blur(12px);
+}
+
+.admin-editor-status-dot {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 999px;
+  background: var(--gold-1);
+  box-shadow: 0 0 0 4px oklch(0.52 0.1 160 / 0.12);
+}
+
+.admin-editor-page .surface-card,
+.admin-editor-page .surface-elevated,
+.admin-editor-page .surface-quiet {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.admin-editor-page .surface-card,
+.admin-editor-page .surface-elevated {
+  border-color: oklch(0.9 0.01 155);
+  box-shadow: 0 18px 45px -38px oklch(0.24 0.035 158 / 0.5);
+}
+
+.admin-editor-page .surface-card:hover,
+.admin-editor-page .surface-elevated:hover {
+  border-color: oklch(0.42 0.085 158 / 0.24);
+  box-shadow: 0 24px 55px -40px oklch(0.24 0.04 158 / 0.55);
+}
+
+.admin-editor-page input,
+.admin-editor-page textarea,
+.admin-editor-page button[role="combobox"] {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.admin-editor-page input:focus,
+.admin-editor-page textarea:focus,
+.admin-editor-page button[role="combobox"]:focus-visible {
+  border-color: oklch(0.42 0.085 158 / 0.42);
+  box-shadow: 0 0 0 3px oklch(0.42 0.085 158 / 0.08);
 }
 
 @keyframes pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
-@utility animate-pop-in {
-  animation: pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
+@utility animate-pop-in { animation: pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 @keyframes pulse-win {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 oklch(0.42 0.085 158 / 0.3);
-  }
-  50% {
-    box-shadow: 0 0 0 6px oklch(0.42 0.085 158 / 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.42 0.085 158 / 0.3); }
+  50% { box-shadow: 0 0 0 6px oklch(0.42 0.085 158 / 0); }
 }
-
-@utility animate-pulse-win {
-  animation: pulse-win 2.2s ease-out infinite;
-}
+@utility animate-pulse-win { animation: pulse-win 2.2s ease-out infinite; }
