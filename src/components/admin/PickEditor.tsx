@@ -11,9 +11,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import type { Json } from "@/integrations/supabase/types";
 import { EVENT_STATE_LABEL, PICK_TYPE_LABEL, RISK_LABEL, SPORT_LABEL, STATUS_LABEL, parseFactors, type Factor, type PickStatus, type PickType, type RiskLevel, type Sport } from "@/lib/alipicks";
-import { getPrimaryPrediction, getScorePrediction, getSecondaryPrediction, type League, type StructuredPick, type Team } from "@/lib/sports-domain";
+import { getPrimaryPrediction, getScorePrediction, getSecondaryPrediction, type StructuredPick, type Team } from "@/lib/sports-domain";
 import { useLeagueTeams, useLeagues } from "@/hooks/use-alipicks";
 import { cn } from "@/lib/utils";
 
@@ -147,22 +146,22 @@ function draftFromPick(pick: StructuredPick): Draft {
     primaryMarket: primary.market_type ?? "1x2",
     primarySelection: primary.selection ?? "",
     primaryRisk: primary.risk ?? "bajo",
-    primaryConfidence: String(primary.confidence || 70),
+    primaryConfidence: String(primary.confidence ?? 70),
     primaryOdds: primary.odds?.toString() ?? "",
     primaryResult: primary.result,
     secondaryMarket: secondary?.market_type ?? "over_under",
     secondarySelection: secondary?.selection ?? "",
     secondaryRisk: secondary?.risk ?? "medio",
-    secondaryConfidence: String(secondary?.confidence || 60),
+    secondaryConfidence: String(secondary?.confidence ?? 60),
     secondaryOdds: secondary?.odds?.toString() ?? "",
     secondaryResult: secondary?.result ?? "pending",
     primaryScoreHome: score?.predicted_home_score?.toString() ?? "",
     primaryScoreAway: score?.predicted_away_score?.toString() ?? "",
-    primaryScoreConfidence: String(score?.confidence || 30),
+    primaryScoreConfidence: String(score?.confidence ?? 30),
     primaryScoreResult: score?.result ?? "pending",
     altScoreHome: alt?.predicted_home_score?.toString() ?? "",
     altScoreAway: alt?.predicted_away_score?.toString() ?? "",
-    altScoreConfidence: String(alt?.confidence || 20),
+    altScoreConfidence: String(alt?.confidence ?? 20),
     altScoreResult: alt?.result ?? "pending",
     factors: DEFAULT_FACTORS.map((factor, index) => factors[index] ?? { ...factor }),
     visibility: pick.visibility,
@@ -242,18 +241,17 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
     try {
       const analysis = draft.analysis.trim();
       const shortDescription = analysis.length > 280 ? `${analysis.slice(0, 277)}...` : analysis;
-      const realScore = draft.homeScore.trim() && draft.awayScore.trim();
+      const hasRealScore = Boolean(draft.homeScore.trim() && draft.awayScore.trim());
       const tags = draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
-      const primaryConfidence = Number(draft.primaryConfidence);
-      const primaryOdds = Number(draft.primaryOdds);
+      const publishedAt = draft.isPublished ? (pick?.published_at ?? new Date().toISOString()) : null;
 
-      const payload = {
+      const pickPayload = {
         sport: draft.sport,
         league_id: draft.leagueId,
         home_team_id: draft.homeTeamId,
         away_team_id: draft.awayTeamId,
-        home_score: realScore ? Number(draft.homeScore) : null,
-        away_score: realScore ? Number(draft.awayScore) : null,
+        home_score: hasRealScore ? Number(draft.homeScore) : null,
+        away_score: hasRealScore ? Number(draft.awayScore) : null,
         event_at: new Date(draft.eventAt).toISOString(),
         event_state: draft.eventState,
         prob_home: Number(draft.probHome),
@@ -261,7 +259,7 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
         prob_away: Number(draft.probAway),
         basic_analysis: analysis,
         short_description: shortDescription,
-        factors: draft.factors as unknown as Json,
+        factors: draft.factors,
         visibility: draft.visibility,
         min_plan_tier: draft.visibility === "free" ? 0 : draft.minPlanTier,
         price_cents: draft.priceCents,
@@ -269,16 +267,14 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
         is_published: draft.isPublished,
         featured: draft.featured,
         recommended: draft.recommended,
-        published_at: draft.isPublished ? (pick?.published_at ?? new Date().toISOString()) : null,
-        final_result: realScore ? `${draft.homeScore}-${draft.awayScore}` : null,
-        // Legacy mirrors kept until Step 8.
-        league: selectedLeague.name,
-        teams: `${selectedHome.name} vs ${selectedAway.name}`,
+        published_at: publishedAt,
+        final_result: hasRealScore ? `${draft.homeScore}-${draft.awayScore}` : null,
+        // Legacy mirrors are still required until Step 8. The RPC resolves league/team names itself.
         pick_type: draft.primaryMarket,
         selection: draft.primarySelection.trim(),
         risk: draft.primaryRisk,
-        confidence: primaryConfidence,
-        odds: primaryOdds,
+        confidence: Number(draft.primaryConfidence),
+        odds: Number(draft.primaryOdds),
         status: draft.primaryResult,
         secondary_selection: draft.secondarySelection.trim(),
         secondary_pick_type: draft.secondaryMarket,
@@ -291,30 +287,36 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
         score_secondary_confidence: Number(draft.altScoreConfidence),
       };
 
-      let pickId = pick?.id;
-      if (pickId) {
-        const { error } = await sportsDb.from("picks").update(payload).eq("id", pickId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await sportsDb.from("picks").insert(payload).select("id").single();
-        if (error || !data) throw error ?? new Error("No se pudo crear el pick");
-        pickId = data.id;
-      }
-
       const predictions = [
-        { pick_id: pickId, kind: "primary", market_type: draft.primaryMarket, selection: draft.primarySelection.trim(), line: null, predicted_home_score: null, predicted_away_score: null, confidence: Number(draft.primaryConfidence), risk: draft.primaryRisk, odds: Number(draft.primaryOdds), result: draft.primaryResult },
-        { pick_id: pickId, kind: "secondary", market_type: draft.secondaryMarket, selection: draft.secondarySelection.trim(), line: null, predicted_home_score: null, predicted_away_score: null, confidence: Number(draft.secondaryConfidence), risk: draft.secondaryRisk, odds: Number(draft.secondaryOdds), result: draft.secondaryResult },
-        { pick_id: pickId, kind: "primary_score", market_type: null, selection: null, line: null, predicted_home_score: Number(draft.primaryScoreHome), predicted_away_score: Number(draft.primaryScoreAway), confidence: Number(draft.primaryScoreConfidence), risk: null, odds: null, result: draft.primaryScoreResult },
-        { pick_id: pickId, kind: "alt_score", market_type: null, selection: null, line: null, predicted_home_score: Number(draft.altScoreHome), predicted_away_score: Number(draft.altScoreAway), confidence: Number(draft.altScoreConfidence), risk: null, odds: null, result: draft.altScoreResult },
+        { kind: "primary", market_type: draft.primaryMarket, selection: draft.primarySelection.trim(), line: null, predicted_home_score: null, predicted_away_score: null, confidence: Number(draft.primaryConfidence), risk: draft.primaryRisk, odds: Number(draft.primaryOdds), result: draft.primaryResult },
+        { kind: "secondary", market_type: draft.secondaryMarket, selection: draft.secondarySelection.trim(), line: null, predicted_home_score: null, predicted_away_score: null, confidence: Number(draft.secondaryConfidence), risk: draft.secondaryRisk, odds: Number(draft.secondaryOdds), result: draft.secondaryResult },
+        { kind: "primary_score", market_type: null, selection: null, line: null, predicted_home_score: Number(draft.primaryScoreHome), predicted_away_score: Number(draft.primaryScoreAway), confidence: Number(draft.primaryScoreConfidence), risk: null, odds: null, result: draft.primaryScoreResult },
+        { kind: "alt_score", market_type: null, selection: null, line: null, predicted_home_score: Number(draft.altScoreHome), predicted_away_score: Number(draft.altScoreAway), confidence: Number(draft.altScoreConfidence), risk: null, odds: null, result: draft.altScoreResult },
       ];
-      const { error: predictionsError } = await sportsDb.from("pick_predictions").upsert(predictions, { onConflict: "pick_id,kind" });
-      if (predictionsError) throw predictionsError;
+
+      const { data: savedPickId, error } = await sportsDb.rpc("save_structured_pick", {
+        p_pick: pickPayload,
+        p_predictions: predictions,
+        p_pick_id: pick?.id ?? null,
+      });
+
+      if (error) throw error;
+      if (!savedPickId) throw new Error("La transacción terminó sin devolver el id del pick.");
 
       toast.success(pick ? "Pick actualizado" : "Pick creado correctamente");
       navigate({ to: "/admin" });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("No se pudo guardar el pick. Revisa las migraciones y los datos ingresados.");
+      const message = typeof error?.message === "string" ? error.message : "";
+      if (message.includes("active member of the selected league")) {
+        toast.error("Uno de los equipos ya no pertenece activamente a la liga seleccionada.");
+      } else if (message.includes("admin role required")) {
+        toast.error("Tu sesión ya no tiene permisos de administrador.");
+      } else if (message.includes("exactly four structured predictions")) {
+        toast.error("El evento debe contener exactamente las cuatro proyecciones del modelo.");
+      } else {
+        toast.error("No se pudo guardar el pick. La operación fue revertida completa; no se guardaron cambios parciales.");
+      }
     } finally {
       setBusy(false);
     }
