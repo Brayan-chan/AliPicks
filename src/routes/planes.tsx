@@ -79,8 +79,8 @@ function PlansPage() {
 
         {bought > 0 && savings > 0 && (
           <div className="mt-6 rounded-xl border border-success/40 bg-success/10 p-4 text-sm text-success">
-            Has desbloqueado {bought} predicciones por {money(spent)}. Con el plan Pro habrías ahorrado{" "}
-            {money(savings)}.
+            Has desbloqueado {bought} predicciones por {money(spent)}. Con el plan Pro habrías
+            ahorrado {money(savings)}.
           </div>
         )}
 
@@ -89,7 +89,9 @@ function PlansPage() {
             const highlighted = plan.slug === "pro";
             const listed = Array.isArray(plan.features) ? (plan.features as string[]) : [];
             const features = listed.length ? listed : (PLAN_BENEFITS[plan.tier] ?? []);
-            const current = account?.subscription?.plan_id === plan.id && account.subscription.status === "active";
+            const current =
+              account?.subscription?.plan_id === plan.id &&
+              account.subscription.status === "active";
             return (
               <div
                 key={plan.id}
@@ -146,7 +148,13 @@ function PlansPage() {
                   disabled={loading !== null || current}
                   onClick={() => subscribe(plan)}
                 >
-                  {current ? "Tu plan actual" : <><Sparkles className="size-4" /> Suscribirme</>}
+                  {current ? (
+                    "Tu plan actual"
+                  ) : (
+                    <>
+                      <Sparkles className="size-4" /> Suscribirme
+                    </>
+                  )}
                 </Button>
               </div>
             );
@@ -159,7 +167,10 @@ function PlansPage() {
           </p>
           <p className="mt-2">
             Cada predicción premium se puede desbloquear por separado. Hoy hay{" "}
-            {(picks ?? []).filter((p) => p.visibility === "premium" && p.status === "pending").length}{" "}
+            {
+              (picks ?? []).filter((p) => p.visibility === "premium" && p.status === "pending")
+                .length
+            }{" "}
             predicciones premium activas: con el plan Pro tienes acceso a todas.
           </p>
         </div>

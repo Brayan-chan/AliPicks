@@ -84,12 +84,16 @@ export function getSecondaryPrediction(pick: StructuredPick): PickPrediction | n
   };
 }
 
-export function getScorePrediction(pick: StructuredPick, kind: "primary_score" | "alt_score"): PickPrediction | null {
+export function getScorePrediction(
+  pick: StructuredPick,
+  kind: "primary_score" | "alt_score",
+): PickPrediction | null {
   const structured = getPrediction(pick, kind);
   if (structured) return structured;
 
   const legacyScore = kind === "primary_score" ? pick.score_primary : pick.score_secondary;
-  const confidence = kind === "primary_score" ? pick.score_primary_confidence : pick.score_secondary_confidence;
+  const confidence =
+    kind === "primary_score" ? pick.score_primary_confidence : pick.score_secondary_confidence;
   if (!legacyScore) return null;
   const match = legacyScore.match(/^\s*(\d+)\s*[-:]\s*(\d+)\s*$/);
   if (!match) return null;

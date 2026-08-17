@@ -13,7 +13,8 @@ export const Route = createFileRoute("/_authenticated/perfil")({
       { title: "Mi perfil — AliPicks" },
       {
         name: "description",
-        content: "Gestiona tu plan, revisa tus predicciones desbloqueadas y tu historial en AliPicks.",
+        content:
+          "Gestiona tu plan, revisa tus predicciones desbloqueadas y tu historial en AliPicks.",
       },
       { property: "og:title", content: "Mi perfil — AliPicks" },
       { property: "og:description", content: "Tu plan, tus compras y tu actividad." },
@@ -95,7 +96,12 @@ function ProfilePage() {
                 <Button asChild size="sm" variant="secondary">
                   <Link to="/planes">Cambiar plan</Link>
                 </Button>
-                <Button size="sm" variant="ghost" onClick={cancel} disabled={sub.cancel_at_period_end}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={cancel}
+                  disabled={sub.cancel_at_period_end}
+                >
                   Cancelar suscripción
                 </Button>
               </div>
@@ -123,8 +129,7 @@ function ProfilePage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{pick?.teams ?? "Pick"}</p>
                     <p className="text-xs text-muted-foreground">
-                      {money(purchase.amount_cents)} ·{" "}
-                      {formatEventDate(purchase.created_at)}
+                      {money(purchase.amount_cents)} · {formatEventDate(purchase.created_at)}
                     </p>
                   </div>
                   {pick && (
@@ -142,7 +147,9 @@ function ProfilePage() {
 
         <Card title="Predicciones que has visto">
           {(views ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">Todavía no has abierto ninguna predicción.</p>
+            <p className="text-sm text-muted-foreground">
+              Todavía no has abierto ninguna predicción.
+            </p>
           ) : (
             <ul className="space-y-2 text-sm">
               {(views ?? []).slice(0, 20).map((v) => (
@@ -156,7 +163,9 @@ function ProfilePage() {
                       "Predicción no disponible"
                     )}
                   </span>
-                  <span className="text-xs text-muted-foreground">{formatDateTime(v.viewed_at)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDateTime(v.viewed_at)}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -165,7 +174,11 @@ function ProfilePage() {
 
         <Card title="Historial de actividad">
           <ul className="space-y-1 text-sm text-muted-foreground">
-            {sub && <li>Suscripción {sub.plans?.name} · estado {sub.status}</li>}
+            {sub && (
+              <li>
+                Suscripción {sub.plans?.name} · estado {sub.status}
+              </li>
+            )}
             {purchased.map(({ purchase, pick }) => (
               <li key={purchase.id}>
                 Compraste “{pick?.teams ?? "pick"}” por {money(purchase.amount_cents)}

@@ -1,15 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { CalendarClock, Lock, Star, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  EventStateBadge,
-  FollowHeart,
-  Probabilities,
-  RiskBadge,
-  StatusBadge,
-} from "./PickBits";
+import { EventStateBadge, FollowHeart, Probabilities, RiskBadge, StatusBadge } from "./PickBits";
 import { MetricInfo, METRIC_HELP } from "./MetricInfo";
-import { PICK_TYPE_LABEL, SPORT_LABEL, formatDateTime, formatEventDate, maskText, money } from "@/lib/alipicks";
+import {
+  PICK_TYPE_LABEL,
+  SPORT_LABEL,
+  formatDateTime,
+  formatEventDate,
+  maskText,
+  money,
+} from "@/lib/alipicks";
 import {
   getLeagueName,
   getMatchTeams,
@@ -24,7 +25,9 @@ function TeamIdentity({ name, logoUrl }: { name: string; logoUrl?: string | null
         {logoUrl ? (
           <img src={logoUrl} alt="" className="size-9 object-contain" loading="lazy" />
         ) : (
-          <span className="font-display text-sm font-bold text-muted-foreground">{name.slice(0, 2).toUpperCase()}</span>
+          <span className="font-display text-sm font-bold text-muted-foreground">
+            {name.slice(0, 2).toUpperCase()}
+          </span>
         )}
       </div>
       <span className="line-clamp-2 text-sm font-semibold leading-tight">{name}</span>
@@ -68,18 +71,24 @@ export function PickCard({
         <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/30 px-3 py-4">
           <TeamIdentity name={homeName!} logoUrl={match.home?.logo_url ?? null} />
           <div className="shrink-0 text-center">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">vs</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              vs
+            </p>
             <p className="mt-1 font-display text-lg font-bold tabular-nums">
               {pick.home_score ?? 0} - {pick.away_score ?? 0}
             </p>
             {pick.home_score == null && pick.away_score == null && (
-              <p className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">previa</p>
+              <p className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
+                previa
+              </p>
             )}
           </div>
           <TeamIdentity name={awayName!} logoUrl={match.away?.logo_url ?? null} />
         </div>
       ) : (
-        <h3 className="break-words font-display text-lg font-bold leading-snug tracking-tight">{match.label}</h3>
+        <h3 className="break-words font-display text-lg font-bold leading-snug tracking-tight">
+          {match.label}
+        </h3>
       )}
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -101,7 +110,9 @@ export function PickCard({
         <p className="mt-1 break-words font-display text-lg font-bold">
           {locked ? maskText(primary.selection ?? "Predicción") : primary.selection}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">Confianza del modelo {primary.confidence}%</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Confianza del modelo {primary.confidence}%
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -112,10 +123,14 @@ export function PickCard({
         <Probabilities pick={pick} />
       </div>
 
-      <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{pick.short_description}</p>
+      <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+        {pick.short_description}
+      </p>
 
       {pick.published_at && (
-        <p className="text-[11px] text-muted-foreground/80">Publicada el {formatDateTime(pick.published_at)}</p>
+        <p className="text-[11px] text-muted-foreground/80">
+          Publicada el {formatDateTime(pick.published_at)}
+        </p>
       )}
 
       {locked ? (

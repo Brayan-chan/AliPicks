@@ -177,13 +177,12 @@ function fromPick(pick: Pick, premium: PremiumContent | null): Draft {
     score_secondary_confidence: pick.score_secondary_confidence?.toString() ?? "",
     factors: (() => {
       const existing = parseFactors(pick.factors);
-      return DEFAULT_FACTORS.map(
-        (f, i) => existing[i] ?? { ...f },
-      );
+      return DEFAULT_FACTORS.map((f, i) => existing[i] ?? { ...f });
     })(),
-    extra_tabs: Array.isArray(pick.extra_tabs) && pick.extra_tabs.length
-      ? JSON.stringify(pick.extra_tabs, null, 2)
-      : "",
+    extra_tabs:
+      Array.isArray(pick.extra_tabs) && pick.extra_tabs.length
+        ? JSON.stringify(pick.extra_tabs, null, 2)
+        : "",
   };
 }
 
@@ -293,9 +292,18 @@ export function AdminPickForm({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Pick2 label="Deporte" value={d.sport} onChange={(v) => set("sport", v)} options={SPORT_LABEL} />
+        <Pick2
+          label="Deporte"
+          value={d.sport}
+          onChange={(v) => set("sport", v)}
+          options={SPORT_LABEL}
+        />
         <Text label="Liga" value={d.league} onChange={(v) => set("league", v)} />
-        <Text label="Partido (Equipo A vs Equipo B)" value={d.teams} onChange={(v) => set("teams", v)} />
+        <Text
+          label="Partido (Equipo A vs Equipo B)"
+          value={d.teams}
+          onChange={(v) => set("teams", v)}
+        />
         <div>
           <Label className="text-xs text-muted-foreground">Fecha y hora del evento</Label>
           <Input
@@ -312,7 +320,12 @@ export function AdminPickForm({
           options={PICK_TYPE_LABEL}
         />
         <Text label="Selección" value={d.selection} onChange={(v) => set("selection", v)} />
-        <Pick2 label="Variabilidad" value={d.risk} onChange={(v) => set("risk", v)} options={RISK_LABEL} />
+        <Pick2
+          label="Variabilidad"
+          value={d.risk}
+          onChange={(v) => set("risk", v)}
+          options={RISK_LABEL}
+        />
         <Text
           label="Confianza (%)"
           value={String(d.confidence)}
@@ -320,11 +333,35 @@ export function AdminPickForm({
           type="number"
         />
         <Text label="Cuota" value={d.odds} onChange={(v) => set("odds", v)} type="number" />
-        <Text label="Etiquetas (separadas por coma)" value={d.tags} onChange={(v) => set("tags", v)} />
-        <Text label="Prob. local %" value={d.prob_home} onChange={(v) => set("prob_home", v)} type="number" />
-        <Text label="Prob. empate %" value={d.prob_draw} onChange={(v) => set("prob_draw", v)} type="number" />
-        <Text label="Prob. visita %" value={d.prob_away} onChange={(v) => set("prob_away", v)} type="number" />
-        <Pick2 label="Resultado" value={d.status} onChange={(v) => set("status", v)} options={STATUS_LABEL} />
+        <Text
+          label="Etiquetas (separadas por coma)"
+          value={d.tags}
+          onChange={(v) => set("tags", v)}
+        />
+        <Text
+          label="Prob. local %"
+          value={d.prob_home}
+          onChange={(v) => set("prob_home", v)}
+          type="number"
+        />
+        <Text
+          label="Prob. empate %"
+          value={d.prob_draw}
+          onChange={(v) => set("prob_draw", v)}
+          type="number"
+        />
+        <Text
+          label="Prob. visita %"
+          value={d.prob_away}
+          onChange={(v) => set("prob_away", v)}
+          type="number"
+        />
+        <Pick2
+          label="Resultado"
+          value={d.status}
+          onChange={(v) => set("status", v)}
+          options={STATUS_LABEL}
+        />
         <Pick2
           label="Estado del evento"
           value={d.event_state}
@@ -508,12 +545,19 @@ export function AdminPickForm({
           Recomendada VIP
         </label>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Checkbox checked={d.is_published} onCheckedChange={(v) => set("is_published", v === true)} />
+          <Checkbox
+            checked={d.is_published}
+            onCheckedChange={(v) => set("is_published", v === true)}
+          />
           Publicado
         </label>
       </div>
 
-      <Button onClick={save} disabled={busy} className="w-full bg-gradient-brand text-primary-foreground">
+      <Button
+        onClick={save}
+        disabled={busy}
+        className="w-full bg-gradient-brand text-primary-foreground"
+      >
         {pick ? "Guardar cambios" : "Publicar predicción"}
       </Button>
     </div>
@@ -534,7 +578,12 @@ function Text({
   return (
     <div>
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input className="mt-1" type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input
+        className="mt-1"
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }
@@ -551,7 +600,11 @@ function Area({
   return (
     <div>
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Textarea className="mt-1 min-h-24" value={value} onChange={(e) => onChange(e.target.value)} />
+      <Textarea
+        className="mt-1 min-h-24"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }

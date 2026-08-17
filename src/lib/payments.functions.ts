@@ -69,7 +69,8 @@ export const createCheckout = createServerFn({ method: "POST" })
       .select("id, name, price_cents, tier, is_active")
       .eq("id", data.id)
       .maybeSingle();
-    if (error || !plan || !plan.is_active) return { url: null, message: "Ese plan no está disponible." };
+    if (error || !plan || !plan.is_active)
+      return { url: null, message: "Ese plan no está disponible." };
     if (plan.price_cents < MIN_MXN_CENTS) {
       return {
         url: null,

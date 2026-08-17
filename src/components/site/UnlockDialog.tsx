@@ -116,8 +116,8 @@ export function UnlockDialog({
             {bought >= 1 && (
               <p className="flex items-start gap-2 rounded-lg bg-success/10 p-3 text-xs text-success">
                 <TrendingUp className="mt-0.5 size-3.5 shrink-0" />
-                Has desbloqueado {bought} predicci{bought === 1 ? "ón" : "ones"} por separado. Te sale más
-                barato suscribirte al plan Pro que desbloquear una por una.
+                Has desbloqueado {bought} predicci{bought === 1 ? "ón" : "ones"} por separado. Te
+                sale más barato suscribirte al plan Pro que desbloquear una por una.
               </p>
             )}
           </div>

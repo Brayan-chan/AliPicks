@@ -150,7 +150,11 @@ function LoginForm({ disabled, onDone }: { disabled: boolean; onDone: () => void
       <Field label="Correo" value={email} onChange={setEmail} type="email" />
       <Field label="Contraseña" value={password} onChange={setPassword} type="password" />
       <AdultCheck checked={adult} onChange={setAdult} />
-      <Button type="submit" className="w-full bg-gradient-brand text-primary-foreground" disabled={busy || disabled}>
+      <Button
+        type="submit"
+        className="w-full bg-gradient-brand text-primary-foreground"
+        disabled={busy || disabled}
+      >
         Entrar
       </Button>
     </form>
@@ -198,7 +202,11 @@ function SignupForm({ disabled, onDone }: { disabled: boolean; onDone: () => voi
       <Field label="Correo" value={email} onChange={setEmail} type="email" />
       <Field label="Contraseña" value={password} onChange={setPassword} type="password" />
       <AdultCheck checked={adult} onChange={setAdult} />
-      <Button type="submit" className="w-full bg-gradient-brand text-primary-foreground" disabled={busy || disabled}>
+      <Button
+        type="submit"
+        className="w-full bg-gradient-brand text-primary-foreground"
+        disabled={busy || disabled}
+      >
         Crear cuenta
       </Button>
     </form>
@@ -234,7 +242,11 @@ function Field({
 function AdultCheck({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex items-start gap-2 text-xs text-muted-foreground">
-      <Checkbox checked={checked} onCheckedChange={(v) => onChange(v === true)} className="mt-0.5" />
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(v) => onChange(v === true)}
+        className="mt-0.5"
+      />
       Soy mayor de 18 años y acepto los términos y el aviso de apuesta responsable.
     </label>
   );
