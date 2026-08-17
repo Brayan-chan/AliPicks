@@ -328,12 +328,15 @@ export type Database = {
           min_plan_tier: number
           odds: number | null
           pick_type: Database["public"]["Enums"]["pick_type"]
+          postponed_at: string | null
+          postponement_reason: string | null
           price_cents: number
           prob_away: number | null
           prob_draw: number | null
           prob_home: number | null
           published_at: string | null
           recommended: boolean
+          rescheduled_for: string | null
           risk: Database["public"]["Enums"]["risk_level"]
           score_primary: string | null
           score_primary_confidence: number | null
@@ -375,12 +378,15 @@ export type Database = {
           min_plan_tier?: number
           odds?: number | null
           pick_type: Database["public"]["Enums"]["pick_type"]
+          postponed_at?: string | null
+          postponement_reason?: string | null
           price_cents?: number
           prob_away?: number | null
           prob_draw?: number | null
           prob_home?: number | null
           published_at?: string | null
           recommended?: boolean
+          rescheduled_for?: string | null
           risk?: Database["public"]["Enums"]["risk_level"]
           score_primary?: string | null
           score_primary_confidence?: number | null
@@ -422,12 +428,15 @@ export type Database = {
           min_plan_tier?: number
           odds?: number | null
           pick_type?: Database["public"]["Enums"]["pick_type"]
+          postponed_at?: string | null
+          postponement_reason?: string | null
           price_cents?: number
           prob_away?: number | null
           prob_draw?: number | null
           prob_home?: number | null
           published_at?: string | null
           recommended?: boolean
+          rescheduled_for?: string | null
           risk?: Database["public"]["Enums"]["risk_level"]
           score_primary?: string | null
           score_primary_confidence?: number | null
@@ -662,6 +671,10 @@ export type Database = {
       }
       save_structured_pick: {
         Args: { p_pick: Json; p_pick_id?: string; p_predictions: Json }
+        Returns: string
+      }
+      save_team_catalog: {
+        Args: { p_league_ids: string[]; p_team: Json; p_team_id?: string }
         Returns: string
       }
     }
