@@ -66,7 +66,7 @@ export function PickCard({
 
       {hasPair ? (
         <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/30 px-3 py-4">
-          <TeamIdentity name={homeName!} logoUrl={match.home?.logo_url} />
+          <TeamIdentity name={homeName!} logoUrl={match.home?.logo_url ?? null} />
           <div className="shrink-0 text-center">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">vs</p>
             <p className="mt-1 font-display text-lg font-bold tabular-nums">
@@ -76,7 +76,7 @@ export function PickCard({
               <p className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">previa</p>
             )}
           </div>
-          <TeamIdentity name={awayName!} logoUrl={match.away?.logo_url} />
+          <TeamIdentity name={awayName!} logoUrl={match.away?.logo_url ?? null} />
         </div>
       ) : (
         <h3 className="break-words font-display text-lg font-bold leading-snug tracking-tight">{match.label}</h3>
