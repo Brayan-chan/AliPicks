@@ -69,12 +69,6 @@ const MARKET_OPTIONS = Object.entries(PICK_TYPE_LABEL).filter(
   ([key]) => key !== "marcador_exacto",
 ) as [PickType, string][];
 
-type PickWithPostponement = StructuredPick & {
-  postponement_reason?: string | null;
-  postponed_at?: string | null;
-  rescheduled_for?: string | null;
-};
-
 type Draft = {
   sport: Sport;
   leagueId: string;
@@ -176,7 +170,6 @@ function emptyDraft(): Draft {
 }
 
 function draftFromPick(pick: StructuredPick): Draft {
-  const lifecyclePick = pick as PickWithPostponement;
   const primary = getPrimaryPrediction(pick);
   const secondary = getSecondaryPrediction(pick);
   const score = getScorePrediction(pick, "primary_score");
@@ -190,10 +183,10 @@ function draftFromPick(pick: StructuredPick): Draft {
     awayTeamId: pick.away_team_id ?? pick.away_team_ref?.id ?? "",
     eventAt: toLocalInput(pick.event_at),
     eventState: pick.event_state as EventState,
-    postponementReason: lifecyclePick.postponement_reason ?? "",
-    postponedAt: lifecyclePick.postponed_at ?? "",
-    rescheduledFor: lifecyclePick.rescheduled_for
-      ? toLocalInput(lifecyclePick.rescheduled_for)
+    postponementReason: pick.postponement_reason ?? "",
+    postponedAt: pick.postponed_at ?? "",
+    rescheduledFor: pick.rescheduled_for
+      ? toLocalInput(pick.rescheduled_for)
       : "",
     homeScore: pick.home_score?.toString() ?? "",
     awayScore: pick.away_score?.toString() ?? "",
@@ -630,11 +623,21 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
         },
       ];
 
-      const { data: savedPickId, error } = await supabase.rpc("save_structured_pick", {
-        p_pick: pickPayload,
-        p_predictions: predictions,
-        p_pick_id: pick?.id ?? null,
-      });
+      const rpcArgs = pick
+        ? {
+          p_pick: pickPayload,
+          p_predictions: predictions,
+          p_pick_id: pick.id,
+        }
+        : {
+          p_pick: pickPayload,
+          p_predictions: predictions,
+        };
+
+      const { data: savedPickId, error } = await supabase.rpc(
+        "save_structured_pick",
+        rpcArgs,
+      );
       if (error) throw error;
       if (!savedPickId) throw new Error("La transacción terminó sin devolver el id del pick.");
 
@@ -715,7 +718,7 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
               hint={
                 draft.eventState === "postponed"
                   ? "Se conserva como referencia mientras el partido está pospuesto."
-                  : undefined
+                  : ""
               }
             >
               <Input
@@ -1369,7 +1372,7 @@ function BetPrediction({
           <Field label="Resultado">
             <Select
               value={result}
-              disabled={resultDisabled}
+              disabled={Boolean(resultDisabled)}
               onValueChange={(v) => onResult(v as PickStatus)}
             >
               <SelectTrigger>
@@ -1420,7 +1423,7 @@ function ScorePrediction({
             Proyección analítica · sin riesgo · sin cuota
           </p>
         </div>
-        <Select value={result} disabled={resultDisabled}>
+        <Select value={result} disabled={Boolean(resultDisabled)}>
           <SelectTrigger className="w-32">
             <SelectValue />
           </SelectTrigger>
