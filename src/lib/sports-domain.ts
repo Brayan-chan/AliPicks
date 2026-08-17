@@ -1,51 +1,12 @@
-import type { Pick, PickStatus, PickType, RiskLevel, Sport } from "@/lib/alipicks";
+import type { Tables } from "@/integrations/supabase/types";
+import type { Pick, PickStatus } from "@/lib/alipicks";
 
-export type PredictionKind = "primary" | "secondary" | "primary_score" | "alt_score";
-
-export type League = {
-  id: string;
-  sport: Sport;
-  name: string;
-  short_name: string | null;
-  country: string | null;
-  season: string | null;
-  logo_url: string | null;
-  is_active: boolean;
-};
-
-export type Team = {
-  id: string;
-  sport: Sport;
-  name: string;
-  short_name: string | null;
-  country: string | null;
-  logo_url: string | null;
-  is_active: boolean;
-};
-
-export type PickPrediction = {
-  id: string;
-  pick_id: string;
-  kind: PredictionKind;
-  market_type: PickType | null;
-  selection: string | null;
-  line: number | null;
-  predicted_home_score: number | null;
-  predicted_away_score: number | null;
-  confidence: number;
-  risk: RiskLevel | null;
-  odds: number | null;
-  result: PickStatus;
-  created_at: string;
-  updated_at: string;
-};
+export type PredictionKind = Tables<"pick_predictions">["kind"];
+export type League = Tables<"leagues">;
+export type Team = Tables<"teams">;
+export type PickPrediction = Tables<"pick_predictions">;
 
 export type StructuredPick = Pick & {
-  league_id?: string | null;
-  home_team_id?: string | null;
-  away_team_id?: string | null;
-  home_score?: number | null;
-  away_score?: number | null;
   league_ref: League | null;
   home_team_ref: Team | null;
   away_team_ref: Team | null;
@@ -80,13 +41,13 @@ export function getMatchTeams(pick: StructuredPick) {
   };
 }
 
-export function getPrimaryPrediction(pick: StructuredPick) {
+export function getPrimaryPrediction(pick: StructuredPick): PickPrediction {
   const structured = getPrediction(pick, "primary");
   if (structured) return structured;
   return {
     id: `legacy-primary-${pick.id}`,
     pick_id: pick.id,
-    kind: "primary" as const,
+    kind: "primary",
     market_type: pick.pick_type,
     selection: pick.selection,
     line: null,
@@ -101,14 +62,14 @@ export function getPrimaryPrediction(pick: StructuredPick) {
   };
 }
 
-export function getSecondaryPrediction(pick: StructuredPick) {
+export function getSecondaryPrediction(pick: StructuredPick): PickPrediction | null {
   const structured = getPrediction(pick, "secondary");
   if (structured) return structured;
   if (!pick.secondary_selection) return null;
   return {
     id: `legacy-secondary-${pick.id}`,
     pick_id: pick.id,
-    kind: "secondary" as const,
+    kind: "secondary",
     market_type: pick.secondary_pick_type ?? pick.pick_type,
     selection: pick.secondary_selection,
     line: null,
@@ -123,7 +84,7 @@ export function getSecondaryPrediction(pick: StructuredPick) {
   };
 }
 
-export function getScorePrediction(pick: StructuredPick, kind: "primary_score" | "alt_score") {
+export function getScorePrediction(pick: StructuredPick, kind: "primary_score" | "alt_score"): PickPrediction | null {
   const structured = getPrediction(pick, kind);
   if (structured) return structured;
 
