@@ -150,3 +150,46 @@ export function getScorePrediction(pick: StructuredPick, kind: "primary_score" |
     updated_at: pick.updated_at,
   };
 }
+
+export function primaryAccuracy(picks: StructuredPick[]) {
+  const resolved = picks.filter((pick) => {
+    const result = getPrimaryPrediction(pick).result;
+    return result === "won" || result === "lost";
+  });
+
+  const won = resolved.filter((pick) => getPrimaryPrediction(pick).result === "won").length;
+  return {
+    rate: resolved.length ? Math.round((won / resolved.length) * 100) : 0,
+    won,
+    lost: resolved.length - won,
+    total: resolved.length,
+  };
+}
+
+export const primaryWinRate = primaryAccuracy;
+
+export function primaryWeeklySeries(picks: StructuredPick[]) {
+  const days: { day: string; rate: number; won: number; total: number }[] = [];
+  const now = new Date();
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const end = start + 86400000;
+    const dayPicks = picks.filter((pick) => {
+      const eventTime = new Date(pick.event_at).getTime();
+      const result = getPrimaryPrediction(pick).result;
+      return eventTime >= start && eventTime < end && (result === "won" || result === "lost");
+    });
+    const won = dayPicks.filter((pick) => getPrimaryPrediction(pick).result === "won").length;
+    days.push({
+      day: new Intl.DateTimeFormat("es-MX", { weekday: "short" }).format(d),
+      rate: dayPicks.length ? Math.round((won / dayPicks.length) * 100) : 0,
+      won,
+      total: dayPicks.length,
+    });
+  }
+
+  return days;
+}
