@@ -29,14 +29,24 @@ function NewPickPage() {
     );
   return (
     <Layout>
-      <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
-        <div className="mb-7">
-          <p className="eyebrow">Admin · Picks</p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold">Nuevo pick</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Registra el partido una vez y captura las cuatro salidas del modelo en una sola
-            pantalla.
-          </p>
+      <div className="admin-editor-page mx-auto max-w-[1480px] px-4 py-6 lg:px-8 lg:py-8">
+        <div className="admin-editor-hero mb-6 overflow-hidden rounded-[28px] border border-border/70 px-5 py-6 sm:px-7 lg:px-8">
+          <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="admin-editor-kicker">AliPicks Studio · Nuevo análisis</div>
+              <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+                Construye el pick como una pieza editorial
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                Define el evento, captura las cuatro salidas del modelo y deja listo el contenido
+                para publicar o resolver después del partido.
+              </p>
+            </div>
+            <div className="admin-editor-status-pill">
+              <span className="admin-editor-status-dot" />
+              Borrador editable
+            </div>
+          </div>
         </div>
         <PickEditor />
       </div>
