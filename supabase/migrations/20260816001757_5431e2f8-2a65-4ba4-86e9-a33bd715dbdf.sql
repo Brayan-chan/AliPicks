@@ -1,0 +1,1 @@
+UPDATE public.picks SET price_cents = 1900 WHERE visibility <> 'free' AND price_cents > 0 AND price_cents < 1000;
