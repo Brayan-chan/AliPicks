@@ -330,6 +330,7 @@ export type Database = {
           pick_type: Database["public"]["Enums"]["pick_type"]
           postponed_at: string | null
           postponement_reason: string | null
+          predictions_locked_at: string | null
           price_cents: number
           prob_away: number | null
           prob_draw: number | null
@@ -380,6 +381,7 @@ export type Database = {
           pick_type: Database["public"]["Enums"]["pick_type"]
           postponed_at?: string | null
           postponement_reason?: string | null
+          predictions_locked_at?: string | null
           price_cents?: number
           prob_away?: number | null
           prob_draw?: number | null
@@ -430,6 +432,7 @@ export type Database = {
           pick_type?: Database["public"]["Enums"]["pick_type"]
           postponed_at?: string | null
           postponement_reason?: string | null
+          predictions_locked_at?: string | null
           price_cents?: number
           prob_away?: number | null
           prob_draw?: number | null
