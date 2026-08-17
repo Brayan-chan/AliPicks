@@ -8,10 +8,18 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   {
     ignores: [
-      "dist",
-      ".output",
-      ".vinxi",
+      "dist/**",
+      "dist-ssr/**",
+      ".output/**",
+      ".vinxi/**",
+      ".tanstack/**",
+      ".nitro/**",
+      ".wrangler/**",
+      "supabase/.temp/**",
+      "supabase/.branches/**",
       "src/integrations/supabase/types.ts",
+      "src/routeTree.gen.ts",
+      "routeTree.gen.ts",
     ],
   },
   {
