@@ -23,9 +23,9 @@ export function useSession() {
 
 const STRUCTURED_PICK_SELECT = `
   *,
-  league:leagues!picks_league_id_fkey(*),
-  home_team:teams!picks_home_team_id_fkey(*),
-  away_team:teams!picks_away_team_id_fkey(*),
+  league_ref:leagues!picks_league_id_fkey(*),
+  home_team_ref:teams!picks_home_team_id_fkey(*),
+  away_team_ref:teams!picks_away_team_id_fkey(*),
   predictions:pick_predictions(*)
 `;
 
