@@ -26,7 +26,7 @@ import {
   type StructuredPick,
 } from "@/lib/sports-domain";
 
-const sportsDb = supabase as any;
+const sportsDb = supabase;
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
