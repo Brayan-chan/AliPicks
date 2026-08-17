@@ -680,6 +680,17 @@ export type Database = {
         Args: { p_league_ids: string[]; p_team: Json; p_team_id?: string }
         Returns: string
       }
+      settle_structured_pick: {
+        Args: {
+          p_away_score?: number
+          p_event_state: string
+          p_home_score?: number
+          p_pick_id: string
+          p_primary_result?: Database["public"]["Enums"]["pick_status"]
+          p_secondary_result?: Database["public"]["Enums"]["pick_status"]
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "user"
