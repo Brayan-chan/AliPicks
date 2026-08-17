@@ -7,13 +7,92 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
+      league_teams: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          league_id: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          league_id: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          league_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_teams_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leagues: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          season: string | null
+          short_name: string | null
+          slug: string
+          sport: Database["public"]["Enums"]["sport"]
+          updated_at: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          season?: string | null
+          short_name?: string | null
+          slug: string
+          sport: Database["public"]["Enums"]["sport"]
+          updated_at?: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          season?: string | null
+          short_name?: string | null
+          slug?: string
+          sport?: Database["public"]["Enums"]["sport"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pick_follows: {
         Row: {
           created_at: string
@@ -36,6 +115,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pick_follows_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "picks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pick_predictions: {
+        Row: {
+          confidence: number
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["prediction_kind"]
+          line: number | null
+          market_type: Database["public"]["Enums"]["pick_type"] | null
+          odds: number | null
+          pick_id: string
+          predicted_away_score: number | null
+          predicted_home_score: number | null
+          result: Database["public"]["Enums"]["pick_status"]
+          risk: Database["public"]["Enums"]["risk_level"] | null
+          selection: string | null
+          updated_at: string
+        }
+        Insert: {
+          confidence: number
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["prediction_kind"]
+          line?: number | null
+          market_type?: Database["public"]["Enums"]["pick_type"] | null
+          odds?: number | null
+          pick_id: string
+          predicted_away_score?: number | null
+          predicted_home_score?: number | null
+          result?: Database["public"]["Enums"]["pick_status"]
+          risk?: Database["public"]["Enums"]["risk_level"] | null
+          selection?: string | null
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["prediction_kind"]
+          line?: number | null
+          market_type?: Database["public"]["Enums"]["pick_type"] | null
+          odds?: number | null
+          pick_id?: string
+          predicted_away_score?: number | null
+          predicted_home_score?: number | null
+          result?: Database["public"]["Enums"]["pick_status"]
+          risk?: Database["public"]["Enums"]["risk_level"] | null
+          selection?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pick_predictions_pick_id_fkey"
             columns: ["pick_id"]
             isOneToOne: false
             referencedRelation: "picks"
@@ -147,6 +285,8 @@ export type Database = {
       }
       picks: {
         Row: {
+          away_score: number | null
+          away_team_id: string | null
           basic_analysis: string | null
           confidence: number
           created_at: string
@@ -157,9 +297,12 @@ export type Database = {
           factors: Json
           featured: boolean
           final_result: string | null
+          home_score: number | null
+          home_team_id: string | null
           id: string
           is_published: boolean
           league: string
+          league_id: string | null
           min_plan_tier: number
           odds: number | null
           pick_type: Database["public"]["Enums"]["pick_type"]
@@ -189,6 +332,8 @@ export type Database = {
           visibility: Database["public"]["Enums"]["visibility"]
         }
         Insert: {
+          away_score?: number | null
+          away_team_id?: string | null
           basic_analysis?: string | null
           confidence?: number
           created_at?: string
@@ -199,9 +344,12 @@ export type Database = {
           factors?: Json
           featured?: boolean
           final_result?: string | null
+          home_score?: number | null
+          home_team_id?: string | null
           id?: string
           is_published?: boolean
           league: string
+          league_id?: string | null
           min_plan_tier?: number
           odds?: number | null
           pick_type: Database["public"]["Enums"]["pick_type"]
@@ -231,6 +379,8 @@ export type Database = {
           visibility?: Database["public"]["Enums"]["visibility"]
         }
         Update: {
+          away_score?: number | null
+          away_team_id?: string | null
           basic_analysis?: string | null
           confidence?: number
           created_at?: string
@@ -241,9 +391,12 @@ export type Database = {
           factors?: Json
           featured?: boolean
           final_result?: string | null
+          home_score?: number | null
+          home_team_id?: string | null
           id?: string
           is_published?: boolean
           league?: string
+          league_id?: string | null
           min_plan_tier?: number
           odds?: number | null
           pick_type?: Database["public"]["Enums"]["pick_type"]
@@ -272,7 +425,29 @@ export type Database = {
           updated_at?: string
           visibility?: Database["public"]["Enums"]["visibility"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "picks_away_team_id_fkey"
+            columns: ["away_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_home_team_id_fkey"
+            columns: ["home_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       plans: {
         Row: {
@@ -387,6 +562,45 @@ export type Database = {
           },
         ]
       }
+      teams: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          short_name: string | null
+          slug: string
+          sport: Database["public"]["Enums"]["sport"]
+          updated_at: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          short_name?: string | null
+          slug: string
+          sport: Database["public"]["Enums"]["sport"]
+          updated_at?: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          short_name?: string | null
+          slug?: string
+          sport?: Database["public"]["Enums"]["sport"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -424,6 +638,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      save_structured_pick: {
+        Args: {
+          p_pick: Json
+          p_predictions: Json
+          p_pick_id?: string | null
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "user"
@@ -435,6 +657,7 @@ export type Database = {
         | "marcador_exacto"
         | "parlay"
         | "prop"
+      prediction_kind: "primary" | "secondary" | "primary_score" | "alt_score"
       risk_level: "bajo" | "medio" | "alto"
       sport: "soccer" | "mlb"
       visibility: "free" | "premium"
@@ -468,12 +691,8 @@ export type Tables<
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends { Row: infer R }
       ? R
       : never
     : never
@@ -482,23 +701,15 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  TableName extends DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends { Insert: infer I }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends { Insert: infer I }
       ? I
       : never
     : never
@@ -507,23 +718,15 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  TableName extends DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends { Update: infer U }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends { Update: infer U }
       ? U
       : never
     : never
@@ -532,14 +735,10 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  EnumName extends DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -549,14 +748,10 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
@@ -567,14 +762,8 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "user"],
       pick_status: ["pending", "won", "lost", "void"],
-      pick_type: [
-        "1x2",
-        "over_under",
-        "handicap",
-        "marcador_exacto",
-        "parlay",
-        "prop",
-      ],
+      pick_type: ["1x2", "over_under", "handicap", "marcador_exacto", "parlay", "prop"],
+      prediction_kind: ["primary", "secondary", "primary_score", "alt_score"],
       risk_level: ["bajo", "medio", "alto"],
       sport: ["soccer", "mlb"],
       visibility: ["free", "premium"],
