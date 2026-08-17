@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAdminLeagues, useMyAccount, useSession } from "@/hooks/use-alipicks";
 import { SPORT_LABEL, type Sport } from "@/lib/alipicks";
 import type { Team } from "@/lib/sports-domain";
@@ -87,65 +88,25 @@ function TeamsManager() {
     const slug = draft.slug.trim() || slugify(draft.name);
     if (!slug) { toast.error("El slug no es válido."); return; }
 
+    const teamPayload: Json = {
+      name: draft.name.trim(),
+      short_name: draft.short_name.trim() || null,
+      slug,
+      sport: draft.sport,
+      country: draft.country.trim() || null,
+      logo_url: draft.logo_url.trim() || null,
+      is_active: draft.is_active,
+    };
+
+    const rpcArgs = editing
+      ? { p_team: teamPayload, p_league_ids: draft.league_ids, p_team_id: editing.id }
+      : { p_team: teamPayload, p_league_ids: draft.league_ids };
+
     setBusy(true);
     try {
-      if (editing && editing.sport !== draft.sport) {
-        const { data: relatedPick, error: pickCheckError } = await supabase
-          .from("picks")
-          .select("id")
-          .or(`home_team_id.eq.${editing.id},away_team_id.eq.${editing.id}`)
-          .limit(1)
-          .maybeSingle();
-        if (pickCheckError) throw pickCheckError;
-        if (relatedPick) {
-          toast.error("No puedes cambiar el deporte de un equipo que ya aparece en picks históricos. Crea un equipo nuevo si necesitas otra disciplina.");
-          return;
-        }
-      }
-
-      const payload = {
-        name: draft.name.trim(),
-        short_name: draft.short_name.trim() || null,
-        slug,
-        sport: draft.sport,
-        country: draft.country.trim() || null,
-        logo_url: draft.logo_url.trim() || null,
-        is_active: draft.is_active,
-      };
-
-      let teamId = editing?.id;
-      if (editing) {
-        const { error } = await supabase.from("teams").update(payload).eq("id", editing.id);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.from("teams").insert(payload).select("id").single();
-        if (error) throw error;
-        teamId = data.id;
-      }
-      if (!teamId) throw new Error("team-id-missing");
-
-      const { data: existingLinks, error: linksReadError } = await supabase
-        .from("league_teams")
-        .select("league_id,is_active")
-        .eq("team_id", teamId);
-      if (linksReadError) throw linksReadError;
-
-      const desired = new Set(draft.league_ids);
-      const omitted = (existingLinks ?? []).filter((link) => link.is_active && !desired.has(link.league_id)).map((link) => link.league_id);
-      if (omitted.length) {
-        const { error } = await supabase
-          .from("league_teams")
-          .update({ is_active: false })
-          .eq("team_id", teamId)
-          .in("league_id", omitted);
-        if (error) throw error;
-      }
-
-      const { error: upsertError } = await supabase.from("league_teams").upsert(
-        draft.league_ids.map((league_id) => ({ league_id, team_id: teamId!, is_active: true })),
-        { onConflict: "league_id,team_id" },
-      );
-      if (upsertError) throw upsertError;
+      const { data: savedTeamId, error } = await supabase.rpc("save_team_catalog", rpcArgs);
+      if (error) throw error;
+      if (!savedTeamId) throw new Error("team-id-missing");
 
       toast.success(editing ? "Equipo actualizado" : "Equipo creado");
       setOpen(false);
@@ -153,7 +114,13 @@ function TeamsManager() {
     } catch (error: unknown) {
       console.error(error);
       const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
-      toast.error(code === "23505" ? "Ya existe un equipo con ese slug." : "No se pudo guardar completamente el equipo. Revisa los datos e inténtalo de nuevo.");
+      const message = error instanceof Error ? error.message : "";
+      if (code === "23505") toast.error("Ya existe un equipo con ese slug.");
+      else if (message.includes("historical picks")) toast.error("No puedes cambiar el deporte de un equipo que ya aparece en picks históricos. Crea un equipo nuevo si necesitas otra disciplina.");
+      else if (message.includes("active team must belong")) toast.error("Un equipo activo debe pertenecer al menos a una liga activa.");
+      else if (message.includes("selected leagues")) toast.error("Todas las ligas seleccionadas deben existir y pertenecer al mismo deporte del equipo.");
+      else if (message.includes("admin role required")) toast.error("Tu sesión ya no tiene permisos de administrador.");
+      else toast.error("No se pudo guardar el equipo. La operación fue revertida completa; no se guardaron cambios parciales.");
     } finally {
       setBusy(false);
     }
