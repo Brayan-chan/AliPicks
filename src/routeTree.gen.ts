@@ -20,6 +20,10 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
 import { Route as PicksIndexRouteImport } from './routes/picks.index'
 import { Route as PicksIdRouteImport } from './routes/picks.$id'
+import { Route as AuthenticatedAdminLeaguesRouteImport } from './routes/_authenticated/admin.leagues'
+import { Route as AuthenticatedAdminTeamsRouteImport } from './routes/_authenticated/admin.teams'
+import { Route as AuthenticatedAdminPicksIdRouteImport } from './routes/_authenticated/admin.picks.$id'
+import { Route as AuthenticatedAdminPicksNewRouteImport } from './routes/_authenticated/admin.picks.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -75,6 +79,29 @@ const PicksIdRoute = PicksIdRouteImport.update({
   path: '/picks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminLeaguesRoute =
+  AuthenticatedAdminLeaguesRouteImport.update({
+    id: '/leagues',
+    path: '/leagues',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminTeamsRoute = AuthenticatedAdminTeamsRouteImport.update({
+  id: '/teams',
+  path: '/teams',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
+const AuthenticatedAdminPicksIdRoute =
+  AuthenticatedAdminPicksIdRouteImport.update({
+    id: '/picks/$id',
+    path: '/picks/$id',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminPicksNewRoute =
+  AuthenticatedAdminPicksNewRouteImport.update({
+    id: '/picks/new',
+    path: '/picks/new',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -83,10 +110,14 @@ export interface FileRoutesByFullPath {
   '/metodologia': typeof MetodologiaRoute
   '/pago': typeof PagoRoute
   '/planes': typeof PlanesRoute
-  '/admin': typeof AuthenticatedAdminRoute
+  '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/perfil': typeof AuthenticatedPerfilRoute
   '/picks/$id': typeof PicksIdRoute
   '/picks/': typeof PicksIndexRoute
+  '/admin/leagues': typeof AuthenticatedAdminLeaguesRoute
+  '/admin/teams': typeof AuthenticatedAdminTeamsRoute
+  '/admin/picks/$id': typeof AuthenticatedAdminPicksIdRoute
+  '/admin/picks/new': typeof AuthenticatedAdminPicksNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -95,10 +126,14 @@ export interface FileRoutesByTo {
   '/metodologia': typeof MetodologiaRoute
   '/pago': typeof PagoRoute
   '/planes': typeof PlanesRoute
-  '/admin': typeof AuthenticatedAdminRoute
+  '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/perfil': typeof AuthenticatedPerfilRoute
   '/picks/$id': typeof PicksIdRoute
   '/picks': typeof PicksIndexRoute
+  '/admin/leagues': typeof AuthenticatedAdminLeaguesRoute
+  '/admin/teams': typeof AuthenticatedAdminTeamsRoute
+  '/admin/picks/$id': typeof AuthenticatedAdminPicksIdRoute
+  '/admin/picks/new': typeof AuthenticatedAdminPicksNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -109,10 +144,14 @@ export interface FileRoutesById {
   '/metodologia': typeof MetodologiaRoute
   '/pago': typeof PagoRoute
   '/planes': typeof PlanesRoute
-  '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
   '/picks/$id': typeof PicksIdRoute
   '/picks/': typeof PicksIndexRoute
+  '/_authenticated/admin/leagues': typeof AuthenticatedAdminLeaguesRoute
+  '/_authenticated/admin/teams': typeof AuthenticatedAdminTeamsRoute
+  '/_authenticated/admin/picks/$id': typeof AuthenticatedAdminPicksIdRoute
+  '/_authenticated/admin/picks/new': typeof AuthenticatedAdminPicksNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -127,6 +166,10 @@ export interface FileRouteTypes {
     | '/perfil'
     | '/picks/$id'
     | '/picks/'
+    | '/admin/leagues'
+    | '/admin/teams'
+    | '/admin/picks/$id'
+    | '/admin/picks/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -139,6 +182,10 @@ export interface FileRouteTypes {
     | '/perfil'
     | '/picks/$id'
     | '/picks'
+    | '/admin/leagues'
+    | '/admin/teams'
+    | '/admin/picks/$id'
+    | '/admin/picks/new'
   id:
     | '__root__'
     | '/'
@@ -152,6 +199,10 @@ export interface FileRouteTypes {
     | '/_authenticated/perfil'
     | '/picks/$id'
     | '/picks/'
+    | '/_authenticated/admin/leagues'
+    | '/_authenticated/admin/teams'
+    | '/_authenticated/admin/picks/$id'
+    | '/_authenticated/admin/picks/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -245,16 +296,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PicksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/leagues': {
+      id: '/_authenticated/admin/leagues'
+      path: '/leagues'
+      fullPath: '/admin/leagues'
+      preLoaderRoute: typeof AuthenticatedAdminLeaguesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/teams': {
+      id: '/_authenticated/admin/teams'
+      path: '/teams'
+      fullPath: '/admin/teams'
+      preLoaderRoute: typeof AuthenticatedAdminTeamsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/picks/$id': {
+      id: '/_authenticated/admin/picks/$id'
+      path: '/picks/$id'
+      fullPath: '/admin/picks/$id'
+      preLoaderRoute: typeof AuthenticatedAdminPicksIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/picks/new': {
+      id: '/_authenticated/admin/picks/new'
+      path: '/picks/new'
+      fullPath: '/admin/picks/new'
+      preLoaderRoute: typeof AuthenticatedAdminPicksNewRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
   }
 }
 
+interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminLeaguesRoute: typeof AuthenticatedAdminLeaguesRoute
+  AuthenticatedAdminTeamsRoute: typeof AuthenticatedAdminTeamsRoute
+  AuthenticatedAdminPicksIdRoute: typeof AuthenticatedAdminPicksIdRoute
+  AuthenticatedAdminPicksNewRoute: typeof AuthenticatedAdminPicksNewRoute
+}
+
+const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminLeaguesRoute: AuthenticatedAdminLeaguesRoute,
+  AuthenticatedAdminTeamsRoute: AuthenticatedAdminTeamsRoute,
+  AuthenticatedAdminPicksIdRoute: AuthenticatedAdminPicksIdRoute,
+  AuthenticatedAdminPicksNewRoute: AuthenticatedAdminPicksNewRoute,
+}
+
+const AuthenticatedAdminRouteWithChildren =
+  AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
+
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
   AuthenticatedPerfilRoute: typeof AuthenticatedPerfilRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedPerfilRoute: AuthenticatedPerfilRoute,
 }
 

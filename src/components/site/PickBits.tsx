@@ -58,7 +58,7 @@ export function EventStateBadge({ state }: { state: string }) {
       )}
     >
       {s === "live" && <span className="size-1.5 animate-pulse rounded-full bg-success" />}
-      {s === "live" ? "EN VIVO" : EVENT_STATE_LABEL[s] ?? state}
+      {s === "live" ? "EN VIVO" : (EVENT_STATE_LABEL[s] ?? state)}
     </span>
   );
 }
@@ -127,7 +127,10 @@ export function Probabilities({ pick }: { pick: Pick }) {
           <span className="font-semibold text-foreground">{pick.confidence}%</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-          <div className="h-full rounded-full bg-gradient-brand" style={{ width: `${pick.confidence}%` }} />
+          <div
+            className="h-full rounded-full bg-gradient-brand"
+            style={{ width: `${pick.confidence}%` }}
+          />
         </div>
       </div>
     );
@@ -137,7 +140,9 @@ export function Probabilities({ pick }: { pick: Pick }) {
     <div className="grid grid-cols-3 gap-2">
       {items.map((i) => (
         <div key={i.label} className="min-w-0 rounded-lg bg-secondary/60 px-2 py-1.5 text-center">
-          <p className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">{i.label}</p>
+          <p className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+            {i.label}
+          </p>
           <p className="font-display text-base font-bold">{i.value}%</p>
         </div>
       ))}

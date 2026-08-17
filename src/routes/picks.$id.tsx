@@ -6,7 +6,6 @@ import { UnlockDialog } from "@/components/site/UnlockDialog";
 import {
   EventStateBadge,
   FollowHeart,
-  MetaLine,
   Probabilities,
   RiskBadge,
   StatusBadge,
@@ -20,9 +19,9 @@ import {
   planTier,
   useLogView,
   useMyAccount,
-  usePick,
   usePremium,
   useSession,
+  useStructuredPick,
   visibleTabs,
 } from "@/hooks/use-alipicks";
 import {
@@ -35,9 +34,18 @@ import {
   parseTabs,
   PICK_TYPE_LABEL,
   RISK_LABEL,
+  SPORT_LABEL,
   TIER_LABEL,
-  type Pick,
+  type PickStatus,
 } from "@/lib/alipicks";
+import {
+  getLeagueName,
+  getMatchTeams,
+  getPrimaryPrediction,
+  getScorePrediction,
+  getSecondaryPrediction,
+  type StructuredPick,
+} from "@/lib/sports-domain";
 
 export const Route = createFileRoute("/picks/$id")({
   head: () => ({
@@ -60,17 +68,34 @@ export const Route = createFileRoute("/picks/$id")({
   component: PickDetail,
 });
 
+function TeamBlock({ name, logo }: { name: string; logo?: string | null }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
+      <div className="grid size-16 place-items-center overflow-hidden rounded-full border border-border bg-background">
+        {logo ? (
+          <img src={logo} alt="" className="size-12 object-contain" />
+        ) : (
+          <span className="font-display text-lg font-bold text-muted-foreground">
+            {name.slice(0, 2).toUpperCase()}
+          </span>
+        )}
+      </div>
+      <span className="font-display text-base font-bold sm:text-lg">{name}</span>
+    </div>
+  );
+}
+
 function PickDetail() {
   const { id } = Route.useParams();
   const { user } = useSession();
   const { data: account } = useMyAccount(user?.id);
-  const { data: pick, isLoading } = usePick(id);
+  const { data: pick, isLoading } = useStructuredPick(id);
   const access = pick ? hasPickAccess(pick, account) : false;
   const { data: premium } = usePremium(pick?.id, access && Boolean(user));
   const [unlock, setUnlock] = useState(false);
   useLogView(user?.id, pick?.id);
 
-  if (isLoading) {
+  if (isLoading)
     return (
       <Layout>
         <div className="mx-auto max-w-3xl px-4 py-10">
@@ -78,9 +103,7 @@ function PickDetail() {
         </div>
       </Layout>
     );
-  }
-
-  if (!pick) {
+  if (!pick)
     return (
       <Layout>
         <div className="mx-auto max-w-3xl px-4 py-20 text-center">
@@ -91,12 +114,21 @@ function PickDetail() {
         </div>
       </Layout>
     );
-  }
 
   const factors = parseFactors(pick.factors);
   const tabs = parseTabs(pick.extra_tabs);
-  const tier = planTier(account);
-  const shownTabs = visibleTabs(tabs, tier, access);
+  const shownTabs = visibleTabs(tabs, planTier(account), access);
+  const primary = getPrimaryPrediction(pick);
+  const secondary = getSecondaryPrediction(pick);
+  const primaryScore = getScorePrediction(pick, "primary_score");
+  const altScore = getScorePrediction(pick, "alt_score");
+  const match = getMatchTeams(pick);
+  const homeName = match.home?.name ?? match.legacyHome;
+  const awayName = match.away?.name ?? match.legacyAway;
+  const actualScore =
+    pick.home_score != null && pick.away_score != null
+      ? `${pick.home_score} - ${pick.away_score}`
+      : null;
 
   return (
     <Layout>
@@ -107,23 +139,45 @@ function PickDetail() {
             <ArrowLeft className="size-4" /> Todas las predicciones
           </Link>
         </Button>
-
         <div className="surface-card overflow-hidden rounded-2xl border p-5 sm:p-8">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <MetaLine pick={pick} />
-              <h1 className="mt-1 break-words font-display text-2xl font-extrabold sm:text-3xl">
-                {pick.teams}
-              </h1>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                {SPORT_LABEL[pick.sport]} · {getLeagueName(pick)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{formatEventDate(pick.event_at)}</p>
             </div>
             <FollowHeart pick={pick} hasAccess={access} onUnlock={() => setUnlock(true)} />
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {homeName && awayName ? (
+            <div className="mt-5 flex items-center gap-4 rounded-2xl border border-border bg-secondary/30 px-4 py-6">
+              <TeamBlock name={homeName} logo={match.home?.logo_url ?? null} />
+              <div className="shrink-0 text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {actualScore ? "Marcador" : "vs"}
+                </p>
+                <p className="mt-1 font-display text-3xl font-extrabold tabular-nums">
+                  {actualScore ?? "0 - 0"}
+                </p>
+                {!actualScore && (
+                  <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Previa
+                  </p>
+                )}
+              </div>
+              <TeamBlock name={awayName} logo={match.away?.logo_url ?? null} />
+            </div>
+          ) : (
+            <h1 className="mt-4 break-words font-display text-2xl font-extrabold sm:text-3xl">
+              {match.label}
+            </h1>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <EventStateBadge state={pick.event_state} />
-            <span>{formatEventDate(pick.event_at)}</span>
-            <RiskBadge risk={pick.risk} />
-            <StatusBadge status={pick.status} />
+            {primary.risk && <RiskBadge risk={primary.risk} />}
+            {primary.result !== "pending" && <StatusBadge status={primary.result} />}
             <span className="rounded-full border border-border px-2 py-0.5 font-semibold text-muted-foreground">
               {pick.visibility === "premium" ? "Análisis completo" : "Acceso libre"}
             </span>
@@ -133,7 +187,6 @@ function PickDetail() {
               </span>
             ))}
           </div>
-
           <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
             {pick.short_description}
           </p>
@@ -146,58 +199,68 @@ function PickDetail() {
                 : `Registrada el ${formatDateTime(pick.created_at)}`}
             </span>
             <span>Última actualización: {formatDateTime(pick.updated_at)}</span>
-            <span>
-              Resultado final: {pick.final_result ? pick.final_result : "Pendiente de cierre"}
-            </span>
+            <span>Resultado del partido: {actualScore ?? pick.final_result ?? "Pendiente"}</span>
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <SelectionCard
-              label="Proyección principal"
-              type={PICK_TYPE_LABEL[pick.pick_type]}
-              selection={pick.selection}
-              odds={pick.odds}
-              confidence={pick.confidence}
-              risk={RISK_LABEL[pick.risk]}
+              label="Primary Pick"
+              type={primary.market_type ? PICK_TYPE_LABEL[primary.market_type] : "Mercado"}
+              selection={primary.selection ?? "Predicción"}
+              odds={primary.odds}
+              confidence={primary.confidence}
+              risk={primary.risk ? RISK_LABEL[primary.risk] : null}
+              result={primary.result}
               locked={!access}
             />
-            {pick.secondary_selection && (
+            {secondary && (
               <SelectionCard
-                label="Proyección secundaria"
-                type={PICK_TYPE_LABEL[pick.secondary_pick_type ?? pick.pick_type]}
-                selection={pick.secondary_selection}
-                odds={pick.secondary_odds}
-                confidence={pick.secondary_confidence ?? 0}
-                risk={RISK_LABEL[pick.secondary_risk ?? pick.risk]}
+                label="Secondary Pick"
+                type={secondary.market_type ? PICK_TYPE_LABEL[secondary.market_type] : "Mercado"}
+                selection={secondary.selection ?? "Predicción"}
+                odds={secondary.odds}
+                confidence={secondary.confidence}
+                risk={secondary.risk ? RISK_LABEL[secondary.risk] : null}
+                result={secondary.result}
                 locked={!access}
               />
             )}
           </div>
 
-          {(pick.score_primary || pick.score_secondary) && (
+          {(primaryScore || altScore) && (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {pick.score_primary && (
+              {primaryScore && (
                 <ScoreCard
-                  label="Marcador proyectado"
-                  score={pick.score_primary}
-                  confidence={pick.score_primary_confidence}
+                  label="Primary Score"
+                  home={primaryScore.predicted_home_score}
+                  away={primaryScore.predicted_away_score}
+                  confidence={primaryScore.confidence}
+                  result={primaryScore.result}
                   locked={!access}
                 />
               )}
-              {pick.score_secondary && (
+              {altScore && (
                 <ScoreCard
-                  label="Marcador alternativo"
-                  score={pick.score_secondary}
-                  confidence={pick.score_secondary_confidence}
+                  label="Alt Score"
+                  home={altScore.predicted_home_score}
+                  away={altScore.predicted_away_score}
+                  confidence={altScore.confidence}
+                  result={altScore.result}
                   locked={!access}
                 />
               )}
             </div>
           )}
+          {(primaryScore || altScore) && (
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              Los marcadores exactos son proyecciones probabilísticas del modelo y se muestran como
+              referencia analítica; no incluyen cuota ni clasificación de riesgo.
+            </p>
+          )}
 
           <div className="mt-6 rounded-xl border border-border bg-secondary/40 p-4">
             <p className="eyebrow mb-2 flex items-center gap-1.5">
-              Probabilidad estimada
+              Probabilidad estimada{" "}
               <MetricInfo text={METRIC_HELP.probabilidad} label="probabilidad estimada" />
             </p>
             <Probabilities pick={pick} />
@@ -213,7 +276,6 @@ function PickDetail() {
                   </p>
                 </section>
               )}
-
               {factors.length > 0 && (
                 <section>
                   <h2 className="font-display text-lg font-bold">Factores analizados</h2>
@@ -224,9 +286,7 @@ function PickDetail() {
                         className="min-w-0 rounded-xl border border-border bg-card p-5"
                         style={{ borderLeft: `3px solid ${f.color}` }}
                       >
-                        <p className="font-display text-sm font-bold">
-                          {f.title}
-                        </p>
+                        <p className="font-display text-sm font-bold">{f.title}</p>
                         <p className="mt-1.5 break-words text-sm leading-relaxed text-muted-foreground">
                           {f.text}
                         </p>
@@ -235,7 +295,6 @@ function PickDetail() {
                   </div>
                 </section>
               )}
-
               {shownTabs.length > 0 && (
                 <section>
                   <h2 className="font-display text-lg font-bold">Datos del partido</h2>
@@ -289,7 +348,6 @@ function PickDetail() {
                   )}
                 </section>
               )}
-
               {pick.visibility === "premium" && premium && (
                 <section className="rounded-xl border border-border bg-accent/60 p-5">
                   <h2 className="flex items-center gap-2 font-display text-lg font-bold">
@@ -309,7 +367,9 @@ function PickDetail() {
                   )}
                   {premium.alternatives && (
                     <p className="mt-3 text-sm text-muted-foreground">
-                      <span className="font-semibold text-foreground">Escenarios alternativos: </span>
+                      <span className="font-semibold text-foreground">
+                        Escenarios alternativos:{" "}
+                      </span>
                       {premium.alternatives}
                     </p>
                   )}
@@ -319,12 +379,8 @@ function PickDetail() {
           ) : (
             <LockedBlock pick={pick} onUnlock={() => setUnlock(true)} />
           )}
-
           <div className="mt-8 border-t border-border pt-5">
-            <Link
-              to="/metodologia"
-              className="text-xs font-semibold text-gold hover:underline"
-            >
+            <Link to="/metodologia" className="text-xs font-semibold text-gold hover:underline">
               Cómo generamos esta proyección →
             </Link>
           </div>
@@ -344,6 +400,7 @@ function SelectionCard({
   odds,
   confidence,
   risk,
+  result,
   locked,
 }: {
   label: string;
@@ -351,62 +408,82 @@ function SelectionCard({
   selection: string;
   odds: number | null;
   confidence: number;
-  risk: string;
+  risk: string | null;
+  result: PickStatus;
   locked: boolean;
 }) {
   const prob = impliedProbability(odds);
   return (
     <div className="min-w-0 rounded-xl border border-border/60 bg-secondary/30 p-4">
-      <p className="eyebrow">{label}</p>
-      <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{type}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="eyebrow">{label}</p>
+          <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{type}</p>
+        </div>
+        {result !== "pending" && <StatusBadge status={result} />}
+      </div>
       <p className="mt-1 break-words font-display text-xl font-bold">
         {locked ? "•••••" : selection}
       </p>
-      {prob != null && !locked && (
-        <p className="mt-1 text-xs text-muted-foreground">Probabilidad estimada: {prob}%</p>
+      {odds != null && !locked && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Cuota {odds.toFixed(2)}
+          {prob != null ? ` · implícita ${prob}%` : ""}
+        </p>
       )}
       <div className="mt-3">
         <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            Confianza del modelo
+            Confianza del modelo{" "}
             <MetricInfo text={METRIC_HELP.confianza} label="confianza del modelo" />
           </span>
           <span className="font-semibold text-foreground">{confidenceOutOfTen(confidence)}/10</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-          <div className="h-full rounded-full bg-gradient-brand" style={{ width: `${confidence}%` }} />
+          <div
+            className="h-full rounded-full bg-gradient-brand"
+            style={{ width: `${confidence}%` }}
+          />
         </div>
       </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">{risk}</p>
+      {risk && <p className="mt-2 text-[11px] text-muted-foreground">{risk}</p>}
     </div>
   );
 }
 
 function ScoreCard({
   label,
-  score,
+  home,
+  away,
   confidence,
+  result,
   locked,
 }: {
   label: string;
-  score: string;
-  confidence: number | null;
+  home: number | null;
+  away: number | null;
+  confidence: number;
+  result: PickStatus;
   locked: boolean;
 }) {
   return (
     <div className="min-w-0 rounded-xl border border-border/60 bg-card/60 p-4 text-center">
-      <p className="eyebrow">{label}</p>
-      <p className="mt-1 font-display text-3xl font-extrabold text-gradient-brand">
-        {locked ? "?-?" : score}
+      <div className="flex items-center justify-between gap-2">
+        <p className="eyebrow">{label}</p>
+        {result !== "pending" && <StatusBadge status={result} />}
+      </div>
+      <p className="mt-2 font-display text-3xl font-extrabold text-gradient-brand">
+        {locked ? "? - ?" : `${home ?? "?"} - ${away ?? "?"}`}
       </p>
-      {confidence != null && (
-        <p className="mt-1 text-xs text-muted-foreground">Confianza {confidence}%</p>
-      )}
+      <p className="mt-1 text-xs text-muted-foreground">Confianza del modelo {confidence}%</p>
+      <p className="mt-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+        Proyección analítica · sin cuota · sin riesgo
+      </p>
     </div>
   );
 }
 
-function LockedBlock({ pick, onUnlock }: { pick: Pick; onUnlock: () => void }) {
+function LockedBlock({ pick, onUnlock }: { pick: StructuredPick; onUnlock: () => void }) {
   return (
     <div className="mt-6 rounded-2xl border border-border bg-secondary/50 p-6 text-center">
       <Lock className="mx-auto size-6 text-gold" />

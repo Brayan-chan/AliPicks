@@ -1,20 +1,12 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Layout } from "@/components/site/Layout";
-import { AdminPickForm } from "@/components/site/AdminPickForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -24,24 +16,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { useMyAccount, usePicks, usePlans, useSession } from "@/hooks/use-alipicks";
+import { useMyAccount, usePlans, useSession, useStructuredPicks } from "@/hooks/use-alipicks";
+import { formatEventDate, money, SPORT_LABEL, STATUS_LABEL, type PickStatus } from "@/lib/alipicks";
 import {
-  formatEventDate,
-  money,
-  SPORT_LABEL,
-  STATUS_LABEL,
-  winRate,
-  type Pick,
-  type PremiumContent,
-} from "@/lib/alipicks";
+  getLeagueName,
+  getMatchTeams,
+  getPrimaryPrediction,
+  primaryWinRate,
+  type StructuredPick,
+} from "@/lib/sports-domain";
 
+const sportsDb = supabase;
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
       { title: "Panel de administración — AliPicks" },
-      { name: "description", content: "Publica picks, gestiona planes, usuarios y métricas de AliPicks." },
-      { property: "og:title", content: "Panel de administración — AliPicks" },
-      { property: "og:description", content: "Gestión de picks, planes, usuarios e ingresos." },
+      {
+        name: "description",
+        content: "Publica picks, gestiona planes, usuarios y métricas de AliPicks.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -51,16 +44,13 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminPage() {
   const { user } = useSession();
   const { data: account, isLoading } = useMyAccount(user?.id);
-
-  if (isLoading) {
+  if (isLoading)
     return (
       <Layout>
         <div className="px-4 py-20 text-center text-sm text-muted-foreground">Cargando…</div>
       </Layout>
     );
-  }
-
-  if (!account?.isAdmin) {
+  if (!account?.isAdmin)
     return (
       <Layout>
         <div className="mx-auto max-w-md px-4 py-20 text-center">
@@ -71,12 +61,25 @@ function AdminPage() {
         </div>
       </Layout>
     );
-  }
-
   return (
     <Layout>
       <div className="mx-auto max-w-6xl px-4 py-10">
-        <h1 className="font-display text-3xl font-extrabold">Panel de administración</h1>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-extrabold">Panel de administración</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Gestiona contenido, catálogo deportivo, usuarios e ingresos.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button asChild variant="secondary">
+              <Link to="/admin/leagues">Ligas</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link to="/admin/teams">Equipos</Link>
+            </Button>
+          </div>
+        </div>
         <Tabs defaultValue="metrics" className="mt-6">
           <TabsList className="flex-wrap">
             <TabsTrigger value="metrics">Métricas</TabsTrigger>
@@ -84,16 +87,23 @@ function AdminPage() {
             <TabsTrigger value="plans">Planes</TabsTrigger>
             <TabsTrigger value="users">Usuarios</TabsTrigger>
           </TabsList>
-          <TabsContent value="metrics"><MetricsTab /></TabsContent>
-          <TabsContent value="picks"><PicksTab /></TabsContent>
-          <TabsContent value="plans"><PlansTab /></TabsContent>
-          <TabsContent value="users"><UsersTab /></TabsContent>
+          <TabsContent value="metrics">
+            <MetricsTab />
+          </TabsContent>
+          <TabsContent value="picks">
+            <PicksTab />
+          </TabsContent>
+          <TabsContent value="plans">
+            <PlansTab />
+          </TabsContent>
+          <TabsContent value="users">
+            <UsersTab />
+          </TabsContent>
         </Tabs>
       </div>
     </Layout>
   );
 }
-
 function useAdminData() {
   return useQuery({
     queryKey: ["admin-data"],
@@ -113,25 +123,25 @@ function useAdminData() {
     },
   });
 }
-
 function MetricsTab() {
   const { data } = useAdminData();
-  const { data: picks } = usePicks();
-  const wr = winRate(picks ?? []);
+  const { data: picks } = useStructuredPicks();
+  const wr = primaryWinRate(picks ?? []);
   const activeSubs = (data?.subs ?? []).filter((s) => s.status === "active");
   const mrr = activeSubs.reduce((sum, s) => sum + (s.plans?.price_cents ?? 0), 0);
   const paid = (data?.purchases ?? []).filter((p) => p.status === "paid");
   const oneOff = paid.reduce((sum, p) => sum + p.amount_cents, 0);
-
   const stats = [
     { label: "Ingreso recurrente (MRR)", value: money(mrr) },
     { label: "Ventas de picks", value: money(oneOff) },
     { label: "Suscriptores activos", value: String(activeSubs.length) },
     { label: "Usuarios registrados", value: String(data?.profiles.length ?? 0) },
-    { label: "Picks publicados", value: String((picks ?? []).filter((p) => p.is_published).length) },
-    { label: "Efectividad global", value: `${wr.rate}% (${wr.won}-${wr.lost})` },
+    {
+      label: "Picks publicados",
+      value: String((picks ?? []).filter((p) => p.is_published).length),
+    },
+    { label: "Efectividad Primary Pick", value: `${wr.rate}% (${wr.won}-${wr.lost})` },
   ];
-
   return (
     <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {stats.map((s) => (
@@ -143,43 +153,40 @@ function MetricsTab() {
     </div>
   );
 }
-
 function PicksTab() {
-  const { data: picks } = usePicks();
+  const { data: picks } = useStructuredPicks();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<{ pick: Pick; premium: PremiumContent | null } | null>(null);
   const [query, setQuery] = useState("");
-
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["picks"] });
     queryClient.invalidateQueries({ queryKey: ["admin-data"] });
   };
-
-  async function edit(pick: Pick) {
-    const { data } = await supabase
-      .from("pick_premium")
-      .select("*")
-      .eq("pick_id", pick.id)
-      .maybeSingle();
-    setEditing({ pick, premium: data ?? null });
-  }
-
-  async function setStatus(pick: Pick, status: string) {
-    const { error } = await supabase
+  async function setStatus(pick: StructuredPick, status: PickStatus) {
+    const primary = getPrimaryPrediction(pick);
+    const structuredPrimary = pick.predictions.find((prediction) => prediction.kind === "primary");
+    if (structuredPrimary) {
+      const { error } = await sportsDb
+        .from("pick_predictions")
+        .update({ result: status })
+        .eq("id", structuredPrimary.id);
+      if (error) {
+        toast.error("No se pudo actualizar el resultado principal.");
+        return;
+      }
+    }
+    const { error: legacyError } = await sportsDb
       .from("picks")
-      .update({ status: status as Pick["status"] })
+      .update({ status })
       .eq("id", pick.id);
-    if (error) {
-      toast.error("No se pudo actualizar el resultado.");
+    if (legacyError) {
+      toast.error("El resultado estructurado cambió, pero falló el espejo legacy.");
       return;
     }
-    toast.success("Resultado actualizado");
+    toast.success(`${primary.selection ?? "Primary Pick"}: ${STATUS_LABEL[status]}`);
     refresh();
   }
-
-  async function remove(pick: Pick) {
-    const { error } = await supabase.from("picks").delete().eq("id", pick.id);
+  async function remove(pick: StructuredPick) {
+    const { error } = await sportsDb.from("picks").delete().eq("id", pick.id);
     if (error) {
       toast.error("No se pudo eliminar el pick.");
       return;
@@ -187,104 +194,86 @@ function PicksTab() {
     toast.success("Pick eliminado");
     refresh();
   }
-
-  const filtered = (picks ?? []).filter((p) =>
-    (p.teams + p.league + p.selection).toLowerCase().includes(query.toLowerCase()),
-  );
-
+  const filtered = (picks ?? []).filter((pick) => {
+    const teams = getMatchTeams(pick).label;
+    const primary = getPrimaryPrediction(pick).selection ?? "";
+    return `${teams} ${getLeagueName(pick)} ${primary}`.toLowerCase().includes(query.toLowerCase());
+  });
   return (
     <div className="mt-5">
       <div className="flex flex-wrap items-center gap-3">
         <Input
-          placeholder="Buscar pick…"
+          placeholder="Buscar partido, liga o pick…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="max-w-xs"
         />
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-brand text-primary-foreground">
-              <Plus className="size-4" /> Nuevo pick
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Publicar pick</DialogTitle>
-            </DialogHeader>
-            <AdminPickForm
-              onSaved={() => {
-                setOpen(false);
-                refresh();
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        <Button asChild className="bg-gradient-brand text-primary-foreground">
+          <Link to="/admin/picks/new">
+            <Plus className="size-4" /> Nuevo pick
+          </Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link to="/admin/leagues">Gestionar ligas</Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link to="/admin/teams">Gestionar equipos</Link>
+        </Button>
       </div>
-
       <div className="mt-4 space-y-2">
-        {filtered.map((p) => (
-          <div
-            key={p.id}
-            className="surface-card flex flex-wrap items-center gap-3 rounded-xl border border-border/70 p-3"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{p.teams}</p>
-              <p className="text-xs text-muted-foreground">
-                {SPORT_LABEL[p.sport]} · {p.league} · {formatEventDate(p.event_at)} · {p.selection}
-              </p>
+        {filtered.map((pick) => {
+          const primary = getPrimaryPrediction(pick);
+          const teams = getMatchTeams(pick);
+          return (
+            <div
+              key={pick.id}
+              className="surface-card flex flex-wrap items-center gap-3 rounded-xl border border-border/70 p-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{teams.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {SPORT_LABEL[pick.sport]} · {getLeagueName(pick)} ·{" "}
+                  {formatEventDate(pick.event_at)} · {primary.selection}
+                </p>
+              </div>
+              <Badge variant={pick.visibility === "free" ? "secondary" : "default"}>
+                {pick.visibility === "free" ? "Gratis" : money(pick.price_cents)}
+              </Badge>
+              {!pick.is_published && <Badge variant="outline">Borrador</Badge>}
+              <Select
+                value={primary.result}
+                onValueChange={(value) => setStatus(pick, value as PickStatus)}
+              >
+                <SelectTrigger className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STATUS_LABEL).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button asChild size="icon" variant="secondary">
+                <Link to="/admin/picks/$id" params={{ id: pick.id }}>
+                  <Pencil className="size-4" />
+                </Link>
+              </Button>
+              <Button size="icon" variant="ghost" onClick={() => remove(pick)}>
+                <Trash2 className="size-4 text-destructive" />
+              </Button>
             </div>
-            <Badge variant={p.visibility === "free" ? "secondary" : "default"}>
-              {p.visibility === "free" ? "Gratis" : money(p.price_cents)}
-            </Badge>
-            {!p.is_published && <Badge variant="outline">Borrador</Badge>}
-            <Select value={p.status} onValueChange={(v) => setStatus(p, v)}>
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button size="icon" variant="secondary" onClick={() => edit(p)}>
-              <Pencil className="size-4" />
-            </Button>
-            <Button size="icon" variant="ghost" onClick={() => remove(p)}>
-              <Trash2 className="size-4 text-destructive" />
-            </Button>
-          </div>
-        ))}
+          );
+        })}
       </div>
-
-      <Dialog open={editing !== null} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Editar pick</DialogTitle>
-          </DialogHeader>
-          {editing && (
-            <AdminPickForm
-              pick={editing.pick}
-              premium={editing.premium}
-              onSaved={() => {
-                setEditing(null);
-                refresh();
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
-
 function PlansTab() {
   const { data: plans } = usePlans();
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-
   async function save(id: string, priceCents: number) {
     const { error } = await supabase.from("plans").update({ price_cents: priceCents }).eq("id", id);
     if (error) {
@@ -294,12 +283,10 @@ function PlansTab() {
     toast.success("Plan actualizado");
     queryClient.invalidateQueries({ queryKey: ["plans"] });
   }
-
   async function toggle(id: string, isActive: boolean) {
     await supabase.from("plans").update({ is_active: isActive }).eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["plans"] });
   }
-
   return (
     <div className="mt-5 space-y-3">
       {(plans ?? []).map((plan) => (
@@ -332,11 +319,9 @@ function PlansTab() {
     </div>
   );
 }
-
 function UsersTab() {
   const { data } = useAdminData();
   const queryClient = useQueryClient();
-
   async function toggleAdmin(userId: string, isAdmin: boolean) {
     const res = isAdmin
       ? await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", "admin")
@@ -348,14 +333,15 @@ function UsersTab() {
     toast.success("Rol actualizado");
     queryClient.invalidateQueries({ queryKey: ["admin-data"] });
   }
-
   return (
     <div className="mt-5 space-y-2">
       {(data?.profiles ?? []).map((profile) => {
         const isAdmin = (data?.roles ?? []).some(
           (r) => r.user_id === profile.id && r.role === "admin",
         );
-        const sub = (data?.subs ?? []).find((s) => s.user_id === profile.id && s.status === "active");
+        const sub = (data?.subs ?? []).find(
+          (s) => s.user_id === profile.id && s.status === "active",
+        );
         const spent = (data?.purchases ?? [])
           .filter((p) => p.user_id === profile.id && p.status === "paid")
           .reduce((sum, p) => sum + p.amount_cents, 0);
@@ -365,9 +351,7 @@ function UsersTab() {
             className="surface-card flex flex-wrap items-center gap-3 rounded-xl border border-border/70 p-3"
           >
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">
-                {profile.full_name || "Sin nombre"}
-              </p>
+              <p className="truncate text-sm font-semibold">{profile.full_name || "Sin nombre"}</p>
               <p className="text-xs text-muted-foreground">
                 {sub?.plans?.name ?? "Sin plan"} · {money(spent)} en picks
               </p>

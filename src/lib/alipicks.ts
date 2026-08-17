@@ -23,9 +23,9 @@ export const PICK_TYPE_LABEL: Record<PickType, string> = {
 };
 
 export const RISK_LABEL: Record<RiskLevel, string> = {
-  bajo: "Variabilidad baja",
-  medio: "Variabilidad media",
-  alto: "Variabilidad alta",
+  bajo: "Riesgo bajo",
+  medio: "Riesgo medio",
+  alto: "Riesgo alto",
 };
 
 export const STATUS_LABEL: Record<PickStatus, string> = {
@@ -124,16 +124,13 @@ export function money(cents: number) {
     maximumFractionDigits: 2,
   }).format(cents / 100);
 }
-
 export function impliedProbability(odds: number | null | undefined) {
   if (!odds || odds <= 1) return null;
   return Math.round((100 / odds) * 10) / 10;
 }
-
 export function confidenceOutOfTen(confidence: number) {
   return (Math.round((confidence / 10) * 10) / 10).toFixed(1);
 }
-
 export function formatEventDate(iso: string) {
   return new Intl.DateTimeFormat("es-MX", {
     weekday: "short",
@@ -143,7 +140,6 @@ export function formatEventDate(iso: string) {
     minute: "2-digit",
   }).format(new Date(iso));
 }
-
 export function formatDateTime(iso: string) {
   return new Intl.DateTimeFormat("es-MX", {
     day: "2-digit",
@@ -165,11 +161,7 @@ export function accuracy(picks: Pick[]) {
     total: resolved.length,
   };
 }
-
-/** Alias histórico. */
 export const winRate = accuracy;
-
-/** Serie diaria de los últimos 7 días con predicciones finalizadas reales. */
 export function weeklySeries(picks: Pick[]) {
   const days: { day: string; rate: number; won: number; total: number }[] = [];
   const now = new Date();
@@ -192,16 +184,13 @@ export function weeklySeries(picks: Pick[]) {
   }
   return days;
 }
-
 export function weeklyStats(picks: Pick[]) {
   const since = Date.now() - 7 * 86400000;
   const week = picks.filter(
-    (p) =>
-      new Date(p.event_at).getTime() >= since && (p.status === "won" || p.status === "lost"),
+    (p) => new Date(p.event_at).getTime() >= since && (p.status === "won" || p.status === "lost"),
   );
   return { ...accuracy(week), series: weeklySeries(picks) };
 }
-
 export function maskText(text: string) {
   return text
     .split(" ")

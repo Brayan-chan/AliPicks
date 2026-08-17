@@ -31,3 +31,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Supabase local development
+supabase/.temp/
+supabase/.branches/

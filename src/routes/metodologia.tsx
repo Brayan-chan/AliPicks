@@ -15,7 +15,8 @@ export const Route = createFileRoute("/metodologia")({
       { property: "og:title", content: "Metodología de análisis — AliPicks" },
       {
         property: "og:description",
-        content: "Datos, análisis, proyección, registro y resultado: el proceso detrás de cada predicción.",
+        content:
+          "Datos, análisis, proyección, registro y resultado: el proceso detrás de cada predicción.",
       },
       { property: "og:type", content: "article" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -72,7 +73,10 @@ function MethodologyPage() {
 
         <div className="mt-12 space-y-px overflow-hidden rounded-2xl border border-border bg-border">
           {STEPS.map((s) => (
-            <div key={s.n} className="grid gap-4 bg-card p-6 sm:grid-cols-[auto_minmax(0,1fr)] sm:p-8">
+            <div
+              key={s.n}
+              className="grid gap-4 bg-card p-6 sm:grid-cols-[auto_minmax(0,1fr)] sm:p-8"
+            >
               <div className="flex items-center gap-4">
                 <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground">
                   <s.icon className="size-5" />

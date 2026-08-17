@@ -3,11 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { ExtraTab, Pick, Plan, Purchase, Subscription } from "@/lib/alipicks";
+import type { League, StructuredPick, Team } from "@/lib/sports-domain";
 
 export function useSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -16,9 +16,16 @@ export function useSession() {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
-
   return { session, user: session?.user ?? null, loading };
 }
+
+const STRUCTURED_PICK_SELECT = `
+  *,
+  league_ref:leagues!picks_league_id_fkey(*),
+  home_team_ref:teams!picks_home_team_id_fkey(*),
+  away_team_ref:teams!picks_away_team_id_fkey(*),
+  predictions:pick_predictions(*)
+`;
 
 export function usePicks() {
   return useQuery({
@@ -34,6 +41,20 @@ export function usePicks() {
   });
 }
 
+export function useStructuredPicks() {
+  return useQuery({
+    queryKey: ["picks", "structured"],
+    queryFn: async (): Promise<StructuredPick[]> => {
+      const { data, error } = await supabase
+        .from("picks")
+        .select(STRUCTURED_PICK_SELECT)
+        .order("event_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as StructuredPick[];
+    },
+  });
+}
+
 export function usePick(id: string) {
   return useQuery({
     queryKey: ["pick", id],
@@ -41,6 +62,51 @@ export function usePick(id: string) {
       const { data, error } = await supabase.from("picks").select("*").eq("id", id).maybeSingle();
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+export function useStructuredPick(id: string) {
+  return useQuery({
+    queryKey: ["pick", id, "structured"],
+    enabled: Boolean(id),
+    queryFn: async (): Promise<StructuredPick | null> => {
+      const { data, error } = await supabase
+        .from("picks")
+        .select(STRUCTURED_PICK_SELECT)
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as unknown as StructuredPick | null;
+    },
+  });
+}
+
+export function useLeagues(sport?: string) {
+  return useQuery({
+    queryKey: ["leagues", sport ?? "all"],
+    queryFn: async (): Promise<League[]> => {
+      let query = supabase.from("leagues").select("*").eq("is_active", true).order("name");
+      if (sport) query = query.eq("sport", sport as League["sport"]);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useLeagueTeams(leagueId?: string) {
+  return useQuery({
+    queryKey: ["league-teams", leagueId],
+    enabled: Boolean(leagueId),
+    queryFn: async (): Promise<Team[]> => {
+      const { data, error } = await supabase
+        .from("league_teams")
+        .select("team:teams(*)")
+        .eq("league_id", leagueId!)
+        .eq("is_active", true);
+      if (error) throw error;
+      return (data ?? []).map((row) => row.team).filter((team): team is Team => Boolean(team));
     },
   });
 }
@@ -58,7 +124,6 @@ export function usePlans() {
     },
   });
 }
-
 export function usePremium(pickId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: ["premium", pickId],
@@ -99,7 +164,6 @@ export function useMyAccount(userId: string | undefined) {
 }
 
 export type Account = NonNullable<ReturnType<typeof useMyAccount>["data"]>;
-
 export function hasPickAccess(pick: Pick, account: Account | undefined) {
   if (pick.visibility === "free") return true;
   if (!account) return false;
@@ -111,7 +175,6 @@ export function hasPickAccess(pick: Pick, account: Account | undefined) {
   if (sub.sport_scope && sub.sport_scope !== pick.sport) return false;
   return true;
 }
-
 export function planTier(account: Account | undefined) {
   if (!account) return 0;
   if (account.isAdmin) return 3;
@@ -119,14 +182,11 @@ export function planTier(account: Account | undefined) {
   if (!sub || sub.status !== "active" || !sub.plans) return 0;
   return sub.plans.tier;
 }
-
-/** Pestañas de datos visibles según el plan del usuario. */
 export function visibleTabs(tabs: ExtraTab[], tier: number, unlocked: boolean) {
   if (unlocked || tier >= 2) return tabs;
   if (tier === 1) return tabs.slice(0, 3);
   return tabs.slice(0, 1);
 }
-
 export function useFollows(userId: string | undefined) {
   return useQuery({
     queryKey: ["follows", userId],
@@ -141,30 +201,24 @@ export function useFollows(userId: string | undefined) {
     },
   });
 }
-
 export function useToggleFollow(userId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ pickId, following }: { pickId: string; following: boolean }) => {
       if (!userId) return;
-      if (following) {
+      if (following)
         await supabase.from("pick_follows").delete().eq("user_id", userId).eq("pick_id", pickId);
-      } else {
-        await supabase.from("pick_follows").insert({ user_id: userId, pick_id: pickId });
-      }
+      else await supabase.from("pick_follows").insert({ user_id: userId, pick_id: pickId });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["follows", userId] }),
   });
 }
-
-/** Registra la visualización de una predicción para el historial del perfil. */
 export function useLogView(userId: string | undefined, pickId: string | undefined) {
   useEffect(() => {
     if (!userId || !pickId) return;
     void supabase.from("pick_views").insert({ user_id: userId, pick_id: pickId });
   }, [userId, pickId]);
 }
-
 export function useMyViews(userId: string | undefined) {
   return useQuery({
     queryKey: ["views", userId],

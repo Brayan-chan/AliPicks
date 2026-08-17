@@ -8,8 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AccuracyChart } from "@/components/site/AccuracyChart";
 import { MetricInfo, METRIC_HELP } from "@/components/site/MetricInfo";
-import { hasPickAccess, planTier, useMyAccount, usePicks, usePlans, useSession } from "@/hooks/use-alipicks";
-import { accuracy, money, weeklySeries, type Pick } from "@/lib/alipicks";
+import {
+  hasPickAccess,
+  planTier,
+  useMyAccount,
+  usePlans,
+  useSession,
+  useStructuredPicks,
+} from "@/hooks/use-alipicks";
+import { money } from "@/lib/alipicks";
+import { primaryAccuracy, primaryWeeklySeries, type StructuredPick } from "@/lib/sports-domain";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,7 +31,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "AliPicks — Análisis y proyecciones de fútbol y MLB" },
       {
         property: "og:description",
-        content: "Proyecciones diarias basadas en datos, con historial verificable y metodología pública.",
+        content:
+          "Proyecciones diarias basadas en datos, con historial verificable y metodología pública.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -36,9 +45,9 @@ function Home() {
   const { user } = useSession();
   const { data: account } = useMyAccount(user?.id);
   const tier = planTier(account);
-  const { data: picks, isLoading } = usePicks();
+  const { data: picks, isLoading } = useStructuredPicks();
   const { data: plans } = usePlans();
-  const [unlock, setUnlock] = useState<Pick | null>(null);
+  const [unlock, setUnlock] = useState<StructuredPick | null>(null);
 
   const { free, premium, stats, weekly } = useMemo(() => {
     const all = picks ?? [];
@@ -46,15 +55,18 @@ function Home() {
     return {
       free: pending.filter((p) => p.visibility === "free").slice(0, 3),
       premium: pending.filter((p) => p.visibility === "premium").slice(0, 6),
-      stats: accuracy(all),
-      weekly: weeklySeries(all),
+      stats: primaryAccuracy(all),
+      weekly: primaryWeeklySeries(all),
     };
   }, [picks]);
 
   return (
     <Layout>
-      <UnlockDialog pick={unlock} open={unlock !== null} onOpenChange={(v) => !v && setUnlock(null)} />
-
+      <UnlockDialog
+        pick={unlock}
+        open={unlock !== null}
+        onOpenChange={(v) => !v && setUnlock(null)}
+      />
       <section className="border-b border-border">
         <div className="mx-auto max-w-6xl px-4 py-14 lg:px-8 lg:py-20">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -77,7 +89,6 @@ function Home() {
               <Link to="/metodologia">Cómo funciona</Link>
             </Button>
           </div>
-
           <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
             <Stat
               label="Rendimiento histórico"
@@ -89,7 +100,6 @@ function Home() {
           </div>
         </div>
       </section>
-
       <section className="mx-auto max-w-6xl px-4 py-14 lg:px-8">
         <SectionTitle
           title="Predicciones de acceso libre"
@@ -97,7 +107,9 @@ function Home() {
         />
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {isLoading ? (
-            Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-80 rounded-2xl" />)
+            Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-80 rounded-2xl" />
+            ))
           ) : free.length ? (
             free.map((p) => <PickCard key={p.id} pick={p} hasAccess />)
           ) : (
@@ -105,7 +117,6 @@ function Home() {
           )}
         </div>
       </section>
-
       <section className="mx-auto max-w-6xl px-4 pb-14 lg:px-8">
         <SectionTitle
           icon={<Sparkles className="size-4 text-gold" />}
@@ -128,13 +139,12 @@ function Home() {
           )}
         </div>
       </section>
-
       <section className="mx-auto max-w-6xl px-4 pb-14 lg:px-8">
         <div className="surface-card rounded-2xl border p-6 sm:p-8">
           <SectionTitle
             icon={<BarChart3 className="size-4 text-gold" />}
             title="Rendimiento de la semana"
-            subtitle="Resultado de las predicciones ya finalizadas en los últimos 7 días."
+            subtitle="Resultado del pick principal de los eventos finalizados en los últimos 7 días."
           />
           <div className="mt-6 min-w-0">
             {stats.total ? (
@@ -155,7 +165,6 @@ function Home() {
           </Button>
         </div>
       </section>
-
       <section className="mx-auto max-w-6xl px-4 pb-16 lg:px-8">
         <SectionTitle title="Planes" subtitle="Elige el nivel de análisis que necesitas." />
         <div className="mt-6 grid gap-5 md:grid-cols-3">
@@ -166,7 +175,9 @@ function Home() {
                 {money(plan.price_cents)}
                 <span className="text-sm font-medium text-muted-foreground">/mes</span>
               </p>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{plan.description}</p>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                {plan.description}
+              </p>
             </div>
           ))}
         </div>
@@ -182,7 +193,6 @@ function Home() {
     </Layout>
   );
 }
-
 function EmptyState({ text }: { text: string }) {
   return (
     <div className="col-span-full rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -190,7 +200,6 @@ function EmptyState({ text }: { text: string }) {
     </div>
   );
 }
-
 function Stat({ label, value, help }: { label: string; value: string; help?: string }) {
   return (
     <div className="surface-card rounded-xl border px-4 py-4">
@@ -202,7 +211,6 @@ function Stat({ label, value, help }: { label: string; value: string; help?: str
     </div>
   );
 }
-
 function SectionTitle({
   icon,
   title,

@@ -19,7 +19,8 @@ export async function stripeRequest<T>(
   if (!key) throw new Error("Stripe no está configurado.");
 
   const body = init.form ? encode(init.form) : undefined;
-  const url = init.method === "GET" && body ? `${STRIPE_API}${path}?${body}` : `${STRIPE_API}${path}`;
+  const url =
+    init.method === "GET" && body ? `${STRIPE_API}${path}?${body}` : `${STRIPE_API}${path}`;
 
   const res = await fetch(url, {
     method: init.method,

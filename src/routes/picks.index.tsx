@@ -13,15 +13,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { hasPickAccess, planTier, useMyAccount, usePicks, useSession } from "@/hooks/use-alipicks";
+import {
+  hasPickAccess,
+  planTier,
+  useMyAccount,
+  useSession,
+  useStructuredPicks,
+} from "@/hooks/use-alipicks";
 import {
   EVENT_STATE_LABEL,
   PICK_TYPE_LABEL,
   RISK_LABEL,
   SPORT_LABEL,
   STATUS_LABEL,
-  type Pick,
 } from "@/lib/alipicks";
+import { getLeagueName, getPrimaryPrediction, type StructuredPick } from "@/lib/sports-domain";
 
 export const Route = createFileRoute("/picks/")({
   head: () => ({
@@ -30,12 +36,12 @@ export const Route = createFileRoute("/picks/")({
       {
         name: "description",
         content:
-          "Filtra predicciones de fútbol y MLB por liga, tipo, variabilidad y estado. Análisis gratuito y premium actualizado a diario.",
+          "Filtra predicciones deportivas por liga, mercado, riesgo y estado. Análisis gratuito y premium actualizado a diario.",
       },
       { property: "og:title", content: "Predicciones del día — AliPicks" },
       {
         property: "og:description",
-        content: "Todas las predicciones de fútbol y MLB con filtros por liga, tipo y variabilidad.",
+        content: "Todas las predicciones deportivas con filtros por liga, mercado y riesgo.",
       },
     ],
   }),
@@ -47,9 +53,8 @@ const ALL = "all";
 function PicksPage() {
   const { user } = useSession();
   const { data: account } = useMyAccount(user?.id);
-  const { data: picks, isLoading } = usePicks();
-  const [unlock, setUnlock] = useState<Pick | null>(null);
-
+  const { data: picks, isLoading } = useStructuredPicks();
+  const [unlock, setUnlock] = useState<StructuredPick | null>(null);
   const [sport, setSport] = useState(ALL);
   const [league, setLeague] = useState(ALL);
   const [type, setType] = useState(ALL);
@@ -62,15 +67,18 @@ function PicksPage() {
   const tier = planTier(account);
 
   const leagues = useMemo(
-    () => Array.from(new Set((picks ?? []).map((p) => p.league))).sort(),
+    () => Array.from(new Set((picks ?? []).map(getLeagueName))).sort(),
     [picks],
   );
 
   const typeRates = useMemo(() => {
     const map: Record<string, number> = {};
     for (const t of Object.keys(PICK_TYPE_LABEL)) {
-      const resolved = (picks ?? []).filter((p) => p.pick_type === t && p.status !== "pending");
-      const won = resolved.filter((p) => p.status === "won").length;
+      const resolved = (picks ?? []).filter((p) => {
+        const primary = getPrimaryPrediction(p);
+        return primary.market_type === t && primary.result !== "pending";
+      });
+      const won = resolved.filter((p) => getPrimaryPrediction(p).result === "won").length;
       map[t] = resolved.length ? won / resolved.length : 0;
     }
     return map;
@@ -78,27 +86,31 @@ function PicksPage() {
 
   const filtered = useMemo(() => {
     let list = (picks ?? []).filter((p) => {
+      const primary = getPrimaryPrediction(p);
       if (sport !== ALL && p.sport !== sport) return false;
-      if (league !== ALL && p.league !== league) return false;
-      if (type !== ALL && p.pick_type !== type) return false;
-      if (risk !== ALL && p.risk !== risk) return false;
-      if (status !== ALL && p.status !== status) return false;
+      if (league !== ALL && getLeagueName(p) !== league) return false;
+      if (type !== ALL && primary.market_type !== type) return false;
+      if (risk !== ALL && primary.risk !== risk) return false;
+      if (status !== ALL && primary.result !== status) return false;
       if (access !== ALL && p.visibility !== access) return false;
       if (state !== ALL && p.event_state !== state) return false;
       return true;
     });
-    list = [...list].sort((a, b) =>
-      sort === "winrate"
-        ? (typeRates[b.pick_type] ?? 0) - (typeRates[a.pick_type] ?? 0)
-        : new Date(a.event_at).getTime() - new Date(b.event_at).getTime(),
-    );
+    list = [...list].sort((a, b) => {
+      if (sort === "winrate") {
+        const aType = getPrimaryPrediction(a).market_type;
+        const bType = getPrimaryPrediction(b).market_type;
+        return (bType ? (typeRates[bType] ?? 0) : 0) - (aType ? (typeRates[aType] ?? 0) : 0);
+      }
+      return new Date(a.event_at).getTime() - new Date(b.event_at).getTime();
+    });
     return list;
   }, [picks, sport, league, type, risk, status, access, state, sort, typeRates]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, Pick[]>();
+    const map = new Map<string, StructuredPick[]>();
     for (const p of filtered) {
-      const key = `${SPORT_LABEL[p.sport]} · ${p.league}`;
+      const key = `${SPORT_LABEL[p.sport]} · ${getLeagueName(p)}`;
       map.set(key, [...(map.get(key) ?? []), p]);
     }
     return Array.from(map.entries());
@@ -106,7 +118,11 @@ function PicksPage() {
 
   return (
     <Layout>
-      <UnlockDialog pick={unlock} open={unlock !== null} onOpenChange={(v) => !v && setUnlock(null)} />
+      <UnlockDialog
+        pick={unlock}
+        open={unlock !== null}
+        onOpenChange={(v) => !v && setUnlock(null)}
+      />
       <div className="mx-auto max-w-6xl px-4 py-10">
         <h1 className="font-display text-3xl font-extrabold">Predicciones</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -122,18 +138,31 @@ function PicksPage() {
           <span className="flex items-center gap-2">
             <Filter className="size-4" /> Filtros · {filtered.length} predicciones
           </span>
-          <ChevronDown className={`size-4 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+          <ChevronDown
+            className={`size-4 transition-transform ${showFilters ? "rotate-180" : ""}`}
+          />
         </Button>
 
         <div
-          className={`surface-card mt-3 gap-3 rounded-2xl border border-border/70 p-4 sm:grid-cols-2 lg:grid-cols-4 ${
-            showFilters ? "grid" : "hidden"
-          }`}
+          className={`surface-card mt-3 gap-3 rounded-2xl border border-border/70 p-4 sm:grid-cols-2 lg:grid-cols-4 ${showFilters ? "grid" : "hidden"}`}
         >
-          <FilterSelect label="Deporte" value={sport} onChange={setSport} options={[["soccer", "Soccer"], ["mlb", "MLB"]]} />
-          <FilterSelect label="Liga" value={league} onChange={setLeague} options={leagues.map((l) => [l, l])} />
           <FilterSelect
-            label="Tipo"
+            label="Deporte"
+            value={sport}
+            onChange={setSport}
+            options={[
+              ["soccer", "Soccer"],
+              ["mlb", "MLB"],
+            ]}
+          />
+          <FilterSelect
+            label="Liga"
+            value={league}
+            onChange={setLeague}
+            options={leagues.map((l) => [l, l])}
+          />
+          <FilterSelect
+            label="Mercado principal"
             value={type}
             onChange={setType}
             options={Object.entries(PICK_TYPE_LABEL)}
@@ -144,9 +173,14 @@ function PicksPage() {
             onChange={setState}
             options={Object.entries(EVENT_STATE_LABEL)}
           />
-          <FilterSelect label="Variabilidad" value={risk} onChange={setRisk} options={Object.entries(RISK_LABEL)} />
           <FilterSelect
-            label="Estado"
+            label="Riesgo"
+            value={risk}
+            onChange={setRisk}
+            options={Object.entries(RISK_LABEL)}
+          />
+          <FilterSelect
+            label="Resultado Primary Pick"
             value={status}
             onChange={setStatus}
             options={Object.entries(STATUS_LABEL)}
@@ -155,14 +189,20 @@ function PicksPage() {
             label="Acceso"
             value={access}
             onChange={setAccess}
-            options={[["free", "Gratuitas"], ["premium", "Premium"]]}
+            options={[
+              ["free", "Gratuitas"],
+              ["premium", "Premium"],
+            ]}
           />
           <FilterSelect
             label="Ordenar por"
             value={sort}
             onChange={setSort}
             allLabel={null}
-            options={[["date", "Fecha (más próximos)"], ["winrate", "Precisión del tipo"]]}
+            options={[
+              ["date", "Fecha (más próximos)"],
+              ["winrate", "Precisión del mercado"],
+            ]}
           />
         </div>
 
