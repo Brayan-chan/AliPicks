@@ -1,27 +1,14 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Check, ChevronsUpDown, Save, ShieldAlert } from "lucide-react";
+import { Check, ChevronsUpDown, CircleCheckBig, Save, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
@@ -32,6 +19,7 @@ import {
   SPORT_LABEL,
   STATUS_LABEL,
   parseFactors,
+  type EventState,
   type Factor,
   type PickStatus,
   type PickType,
@@ -67,7 +55,7 @@ type Draft = {
   homeTeamId: string;
   awayTeamId: string;
   eventAt: string;
-  eventState: string;
+  eventState: EventState;
   homeScore: string;
   awayScore: string;
   probHome: string;
@@ -109,6 +97,7 @@ function toLocalInput(iso: string) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
 function emptyDraft(): Draft {
   return {
     sport: "soccer",
@@ -153,6 +142,7 @@ function emptyDraft(): Draft {
     recommended: false,
   };
 }
+
 function draftFromPick(pick: StructuredPick): Draft {
   const primary = getPrimaryPrediction(pick);
   const secondary = getSecondaryPrediction(pick);
@@ -166,7 +156,7 @@ function draftFromPick(pick: StructuredPick): Draft {
     homeTeamId: pick.home_team_id ?? pick.home_team_ref?.id ?? "",
     awayTeamId: pick.away_team_id ?? pick.away_team_ref?.id ?? "",
     eventAt: toLocalInput(pick.event_at),
-    eventState: pick.event_state,
+    eventState: pick.event_state as EventState,
     homeScore: pick.home_score?.toString() ?? "",
     awayScore: pick.away_score?.toString() ?? "",
     probHome: pick.prob_home?.toString() ?? "",
@@ -203,13 +193,28 @@ function draftFromPick(pick: StructuredPick): Draft {
     recommended: pick.recommended,
   };
 }
+
 function asPercent(value: string) {
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
 }
+
 function positiveInt(value: string) {
   if (!/^\d+$/.test(value.trim())) return null;
   return Number(value);
+}
+
+function scoreResult(predictedHome: string, predictedAway: string, realHome: string, realAway: string): PickStatus {
+  const ph = positiveInt(predictedHome);
+  const pa = positiveInt(predictedAway);
+  const rh = positiveInt(realHome);
+  const ra = positiveInt(realAway);
+  if (ph == null || pa == null || rh == null || ra == null) return "pending";
+  return ph === rh && pa === ra ? "won" : "lost";
+}
+
+function allPredictionResults(draft: Draft) {
+  return [draft.primaryResult, draft.secondaryResult, draft.primaryScoreResult, draft.altScoreResult];
 }
 
 export function PickEditor({ pick }: { pick?: StructuredPick }) {
@@ -218,18 +223,19 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
   const [busy, setBusy] = useState(false);
   const { data: leagues = [] } = useLeagues(draft.sport);
   const { data: teams = [] } = useLeagueTeams(draft.leagueId || undefined);
-  const selectedLeague =
-    leagues.find((league) => league.id === draft.leagueId) ?? pick?.league_ref ?? null;
-  const selectedHome =
-    teams.find((team) => team.id === draft.homeTeamId) ?? pick?.home_team_ref ?? null;
-  const selectedAway =
-    teams.find((team) => team.id === draft.awayTeamId) ?? pick?.away_team_ref ?? null;
+  const selectedLeague = leagues.find((league) => league.id === draft.leagueId) ?? pick?.league_ref ?? null;
+  const selectedHome = teams.find((team) => team.id === draft.homeTeamId) ?? pick?.home_team_ref ?? null;
+  const selectedAway = teams.find((team) => team.id === draft.awayTeamId) ?? pick?.away_team_ref ?? null;
   const probabilityTotal = useMemo(
     () => Number(draft.probHome || 0) + Number(draft.probDraw || 0) + Number(draft.probAway || 0),
     [draft.probHome, draft.probDraw, draft.probAway],
   );
+  const resolvedCount = allPredictionResults(draft).filter((result) => result !== "pending").length;
+  const canResolve = draft.eventState === "finished" || draft.eventState === "cancelled";
+
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
+
   function changeSport(sport: Sport) {
     setDraft((current) => ({
       ...current,
@@ -240,9 +246,78 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
       probDraw: sport === "mlb" ? "" : current.probDraw,
     }));
   }
+
   function changeLeague(leagueId: string) {
     setDraft((current) => ({ ...current, leagueId, homeTeamId: "", awayTeamId: "" }));
   }
+
+  function applyExactScoreResults(current: Draft) {
+    return {
+      ...current,
+      primaryScoreResult: scoreResult(
+        current.primaryScoreHome,
+        current.primaryScoreAway,
+        current.homeScore,
+        current.awayScore,
+      ),
+      altScoreResult: scoreResult(
+        current.altScoreHome,
+        current.altScoreAway,
+        current.homeScore,
+        current.awayScore,
+      ),
+    };
+  }
+
+  function changeEventState(eventState: EventState) {
+    setDraft((current) => {
+      if (eventState === "cancelled") {
+        return {
+          ...current,
+          eventState,
+          homeScore: "",
+          awayScore: "",
+          primaryResult: "void",
+          secondaryResult: "void",
+          primaryScoreResult: "void",
+          altScoreResult: "void",
+        };
+      }
+
+      let next: Draft = { ...current, eventState };
+      if (current.eventState === "cancelled") {
+        next = {
+          ...next,
+          primaryResult: "pending",
+          secondaryResult: "pending",
+          primaryScoreResult: "pending",
+          altScoreResult: "pending",
+        };
+      }
+      if (eventState === "finished") next = applyExactScoreResults(next);
+      return next;
+    });
+  }
+
+  function changeRealScore(side: "home" | "away", value: string) {
+    setDraft((current) => {
+      const next = {
+        ...current,
+        [side === "home" ? "homeScore" : "awayScore"]: value,
+      } as Draft;
+      return next.eventState === "finished" ? applyExactScoreResults(next) : next;
+    });
+  }
+
+  function finishMatch() {
+    if (positiveInt(draft.homeScore) == null || positiveInt(draft.awayScore) == null) {
+      toast.error("Completa el marcador real antes de finalizar el partido.");
+      return;
+    }
+    setDraft((current) => applyExactScoreResults({ ...current, eventState: "finished" }));
+    toast.success("Partido marcado como finalizado. Los scores se resolvieron automáticamente; revisa Primary y Secondary Pick.");
+  }
+
   function validationError() {
     if (!draft.leagueId || !draft.homeTeamId || !draft.awayTeamId)
       return "Selecciona liga, equipo local y equipo visitante.";
@@ -263,31 +338,31 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
       positiveInt(draft.altScoreAway) == null
     )
       return "Primary Score y Alt Score deben tener marcadores válidos.";
-    if (
-      asPercent(draft.primaryScoreConfidence) == null ||
-      asPercent(draft.altScoreConfidence) == null
-    )
+    if (asPercent(draft.primaryScoreConfidence) == null || asPercent(draft.altScoreConfidence) == null)
       return "Las confianzas de los marcadores deben estar entre 0 y 100.";
+
     const home = asPercent(draft.probHome);
     const away = asPercent(draft.probAway);
-    const draw =
-      draft.sport === "soccer"
-        ? asPercent(draft.probDraw)
-        : draft.probDraw.trim()
-          ? asPercent(draft.probDraw)
-          : null;
+    const draw = draft.sport === "soccer" ? asPercent(draft.probDraw) : draft.probDraw.trim() ? asPercent(draft.probDraw) : null;
     if (home == null || away == null || (draft.sport === "soccer" && draw == null))
       return "Completa correctamente las probabilidades del partido.";
     if (Math.abs(probabilityTotal - 100) > 0.001)
       return "Las probabilidades deben sumar exactamente 100%.";
     if (draft.factors.some((factor) => !factor.text.trim()))
       return "Completa los seis factores del análisis.";
-    const hasRealScore = draft.homeScore.trim() || draft.awayScore.trim();
-    if (
-      hasRealScore &&
-      (positiveInt(draft.homeScore) == null || positiveInt(draft.awayScore) == null)
-    )
-      return "Si registras un resultado real, completa ambos marcadores.";
+
+    const hasAnyRealScore = Boolean(draft.homeScore.trim() || draft.awayScore.trim());
+    const hasCompleteRealScore = positiveInt(draft.homeScore) != null && positiveInt(draft.awayScore) != null;
+    if (hasAnyRealScore && !hasCompleteRealScore)
+      return "Si registras un marcador real, completa ambos equipos.";
+    if (draft.eventState === "finished" && !hasCompleteRealScore)
+      return "Un partido finalizado debe tener marcador real completo.";
+    if (draft.eventState === "cancelled" && hasAnyRealScore)
+      return "Un partido cancelado no debe tener marcador real.";
+    if (draft.eventState === "finished" && allPredictionResults(draft).some((result) => result === "pending"))
+      return "Antes de guardar un partido finalizado, resuelve Primary Pick y Secondary Pick. Los scores se resuelven automáticamente.";
+    if (draft.eventState === "cancelled" && allPredictionResults(draft).some((result) => result !== "void"))
+      return "Las cuatro proyecciones de un partido cancelado deben quedar anuladas.";
     return null;
   }
 
@@ -301,18 +376,15 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
       toast.error("No se pudieron resolver las entidades seleccionadas.");
       return;
     }
+
     setBusy(true);
     try {
       const analysis = draft.analysis.trim();
       const shortDescription = analysis.length > 280 ? `${analysis.slice(0, 277)}...` : analysis;
-      const hasRealScore = Boolean(draft.homeScore.trim() && draft.awayScore.trim());
-      const tags = draft.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean);
-      const publishedAt = draft.isPublished
-        ? (pick?.published_at ?? new Date().toISOString())
-        : null;
+      const hasRealScore = positiveInt(draft.homeScore) != null && positiveInt(draft.awayScore) != null;
+      const tags = draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+      const publishedAt = draft.isPublished ? (pick?.published_at ?? new Date().toISOString()) : null;
+
       const pickPayload: Json = {
         sport: draft.sport,
         league_id: draft.leagueId,
@@ -336,7 +408,7 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
         featured: draft.featured,
         recommended: draft.recommended,
         published_at: publishedAt,
-        final_result: hasRealScore ? `${draft.homeScore}-${draft.awayScore}` : null,
+        final_result: draft.eventState === "finished" && hasRealScore ? `${draft.homeScore}-${draft.awayScore}` : null,
         pick_type: draft.primaryMarket,
         selection: draft.primarySelection.trim(),
         risk: draft.primaryRisk,
@@ -353,6 +425,7 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
         score_secondary: `${draft.altScoreHome}-${draft.altScoreAway}`,
         score_secondary_confidence: Number(draft.altScoreConfidence),
       };
+
       const predictions: Json = [
         {
           kind: "primary",
@@ -403,6 +476,7 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
           result: draft.altScoreResult,
         },
       ];
+
       const { data: savedPickId, error } = await supabase.rpc("save_structured_pick", {
         p_pick: pickPayload,
         p_predictions: predictions,
@@ -410,6 +484,7 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
       });
       if (error) throw error;
       if (!savedPickId) throw new Error("La transacción terminó sin devolver el id del pick.");
+
       toast.success(pick ? "Pick actualizado" : "Pick creado correctamente");
       navigate({ to: "/admin" });
     } catch (error: unknown) {
@@ -422,9 +497,7 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
       else if (message.includes("exactly four structured predictions"))
         toast.error("El evento debe contener exactamente las cuatro proyecciones del modelo.");
       else
-        toast.error(
-          "No se pudo guardar el pick. La operación fue revertida completa; no se guardaron cambios parciales.",
-        );
+        toast.error("No se pudo guardar el pick. La operación fue revertida completa; no se guardaron cambios parciales.");
     } finally {
       setBusy(false);
     }
@@ -435,349 +508,150 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
       <div className="space-y-6">
         <EditorSection
           title="1. Partido"
-          description="Selecciona liga y equipos registrados. Cambiar una selección no borra el resto del formulario."
+          description="Selecciona liga y equipos. El estado y marcador real se pueden actualizar después sin rehacer el análisis."
         >
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Deporte">
               <Select value={draft.sport} onValueChange={(value) => changeSport(value as Sport)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SPORT_LABEL).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(SPORT_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <EntityPicker
-              label="Liga"
-              placeholder="Buscar liga…"
-              value={draft.leagueId}
-              options={leagues}
-              getLabel={(league) => league.name}
-              onChange={changeLeague}
-            />
-            <EntityPicker
-              label="Equipo local"
-              placeholder="Buscar equipo local…"
-              value={draft.homeTeamId}
-              options={teams.filter((team) => team.id !== draft.awayTeamId)}
-              getLabel={(team) => team.name}
-              image={(team) => team.logo_url}
-              onChange={(value) => set("homeTeamId", value)}
-              disabled={!draft.leagueId}
-            />
-            <EntityPicker
-              label="Equipo visitante"
-              placeholder="Buscar equipo visitante…"
-              value={draft.awayTeamId}
-              options={teams.filter((team) => team.id !== draft.homeTeamId)}
-              getLabel={(team) => team.name}
-              image={(team) => team.logo_url}
-              onChange={(value) => set("awayTeamId", value)}
-              disabled={!draft.leagueId}
-            />
-            <Field label="Fecha y hora">
-              <Input
-                type="datetime-local"
-                value={draft.eventAt}
-                onChange={(event) => set("eventAt", event.target.value)}
-              />
-            </Field>
+            <EntityPicker label="Liga" placeholder="Buscar liga…" value={draft.leagueId} options={leagues} getLabel={(league) => league.name} onChange={changeLeague} />
+            <EntityPicker label="Equipo local" placeholder="Buscar equipo local…" value={draft.homeTeamId} options={teams.filter((team) => team.id !== draft.awayTeamId)} getLabel={(team) => team.name} image={(team) => team.logo_url} onChange={(value) => set("homeTeamId", value)} disabled={!draft.leagueId} />
+            <EntityPicker label="Equipo visitante" placeholder="Buscar equipo visitante…" value={draft.awayTeamId} options={teams.filter((team) => team.id !== draft.homeTeamId)} getLabel={(team) => team.name} image={(team) => team.logo_url} onChange={(value) => set("awayTeamId", value)} disabled={!draft.leagueId} />
+            <Field label="Fecha y hora"><Input type="datetime-local" value={draft.eventAt} onChange={(event) => set("eventAt", event.target.value)} /></Field>
             <Field label="Estado del partido">
-              <Select value={draft.eventState} onValueChange={(value) => set("eventState", value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(EVENT_STATE_LABEL).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+              <Select value={draft.eventState} onValueChange={(value) => changeEventState(value as EventState)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(EVENT_STATE_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
           </div>
+
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Marcador real local" hint="Déjalo vacío antes del partido.">
-              <Input
-                type="number"
-                min={0}
-                value={draft.homeScore}
-                onChange={(event) => set("homeScore", event.target.value)}
-              />
+            <Field label="Marcador real local" hint={draft.eventState === "live" ? "Puedes registrar el marcador parcial." : "Déjalo vacío antes del partido."}>
+              <Input type="number" min={0} disabled={draft.eventState === "cancelled"} value={draft.homeScore} onChange={(event) => changeRealScore("home", event.target.value)} />
             </Field>
             <Field label="Marcador real visitante">
-              <Input
-                type="number"
-                min={0}
-                value={draft.awayScore}
-                onChange={(event) => set("awayScore", event.target.value)}
-              />
+              <Input type="number" min={0} disabled={draft.eventState === "cancelled"} value={draft.awayScore} onChange={(event) => changeRealScore("away", event.target.value)} />
             </Field>
           </div>
+
+          {draft.eventState !== "cancelled" && draft.eventState !== "finished" && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-secondary/30 p-4">
+              <div>
+                <p className="text-sm font-semibold">¿Terminó el partido?</p>
+                <p className="text-xs text-muted-foreground">Registra el marcador y AliPicks resolverá automáticamente Primary Score y Alt Score.</p>
+              </div>
+              <Button type="button" variant="secondary" onClick={finishMatch}>
+                <CircleCheckBig className="size-4" /> Finalizar partido
+              </Button>
+            </div>
+          )}
         </EditorSection>
-        <EditorSection
-          title="2. Probabilidades del modelo"
-          description="La suma debe ser exactamente 100%."
-        >
+
+        <EditorSection title="2. Probabilidades del modelo" description="La suma debe ser exactamente 100%.">
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Local %">
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={draft.probHome}
-                onChange={(event) => set("probHome", event.target.value)}
-              />
-            </Field>
-            {draft.sport === "soccer" && (
-              <Field label="Empate %">
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={draft.probDraw}
-                  onChange={(event) => set("probDraw", event.target.value)}
-                />
-              </Field>
-            )}
-            <Field label="Visitante %">
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={draft.probAway}
-                onChange={(event) => set("probAway", event.target.value)}
-              />
-            </Field>
+            <Field label="Local %"><Input type="number" min={0} max={100} value={draft.probHome} onChange={(event) => set("probHome", event.target.value)} /></Field>
+            {draft.sport === "soccer" && <Field label="Empate %"><Input type="number" min={0} max={100} value={draft.probDraw} onChange={(event) => set("probDraw", event.target.value)} /></Field>}
+            <Field label="Visitante %"><Input type="number" min={0} max={100} value={draft.probAway} onChange={(event) => set("probAway", event.target.value)} /></Field>
           </div>
-          <p
-            className={cn(
-              "mt-3 text-xs font-semibold",
-              probabilityTotal === 100 ? "text-success" : "text-destructive",
-            )}
-          >
-            Total: {probabilityTotal}%
-          </p>
+          <p className={cn("mt-3 text-xs font-semibold", probabilityTotal === 100 ? "text-success" : "text-destructive")}>Total: {probabilityTotal}%</p>
         </EditorSection>
+
         <EditorSection
           title="3. Predicciones"
-          description="Todos los eventos tienen cuatro salidas del modelo. Los marcadores exactos no tienen riesgo ni cuota."
+          description="Primary y Secondary se resuelven manualmente al terminar el partido. Los scores se comparan automáticamente con el marcador final."
         >
+          {canResolve && (
+            <div className={cn(
+              "mb-4 rounded-xl border p-4",
+              draft.eventState === "cancelled" ? "border-muted bg-secondary/30" : "border-emerald-500/20 bg-emerald-500/5",
+            )}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">Resolución del evento</p>
+                  <p className="text-xs text-muted-foreground">
+                    {draft.eventState === "cancelled"
+                      ? "Las cuatro proyecciones quedaron anuladas automáticamente."
+                      : `${resolvedCount}/4 proyecciones resueltas. Solo necesitas decidir Primary y Secondary Pick.`}
+                  </p>
+                </div>
+                {draft.eventState === "finished" && resolvedCount === 4 && <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">Listo para guardar</span>}
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-4 lg:grid-cols-2">
-            <BetPrediction
-              title="Primary Pick"
-              market={draft.primaryMarket}
-              selection={draft.primarySelection}
-              risk={draft.primaryRisk}
-              confidence={draft.primaryConfidence}
-              odds={draft.primaryOdds}
-              result={draft.primaryResult}
-              onMarket={(v) => set("primaryMarket", v)}
-              onSelection={(v) => set("primarySelection", v)}
-              onRisk={(v) => set("primaryRisk", v)}
-              onConfidence={(v) => set("primaryConfidence", v)}
-              onOdds={(v) => set("primaryOdds", v)}
-              onResult={(v) => set("primaryResult", v)}
-            />
-            <BetPrediction
-              title="Secondary Pick"
-              market={draft.secondaryMarket}
-              selection={draft.secondarySelection}
-              risk={draft.secondaryRisk}
-              confidence={draft.secondaryConfidence}
-              odds={draft.secondaryOdds}
-              result={draft.secondaryResult}
-              onMarket={(v) => set("secondaryMarket", v)}
-              onSelection={(v) => set("secondarySelection", v)}
-              onRisk={(v) => set("secondaryRisk", v)}
-              onConfidence={(v) => set("secondaryConfidence", v)}
-              onOdds={(v) => set("secondaryOdds", v)}
-              onResult={(v) => set("secondaryResult", v)}
-            />
+            <BetPrediction title="Primary Pick" market={draft.primaryMarket} selection={draft.primarySelection} risk={draft.primaryRisk} confidence={draft.primaryConfidence} odds={draft.primaryOdds} result={draft.primaryResult} resultDisabled={!canResolve || draft.eventState === "cancelled"} onMarket={(v) => set("primaryMarket", v)} onSelection={(v) => set("primarySelection", v)} onRisk={(v) => set("primaryRisk", v)} onConfidence={(v) => set("primaryConfidence", v)} onOdds={(v) => set("primaryOdds", v)} onResult={(v) => set("primaryResult", v)} />
+            <BetPrediction title="Secondary Pick" market={draft.secondaryMarket} selection={draft.secondarySelection} risk={draft.secondaryRisk} confidence={draft.secondaryConfidence} odds={draft.secondaryOdds} result={draft.secondaryResult} resultDisabled={!canResolve || draft.eventState === "cancelled"} onMarket={(v) => set("secondaryMarket", v)} onSelection={(v) => set("secondarySelection", v)} onRisk={(v) => set("secondaryRisk", v)} onConfidence={(v) => set("secondaryConfidence", v)} onOdds={(v) => set("secondaryOdds", v)} onResult={(v) => set("secondaryResult", v)} />
           </div>
+
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <ScorePrediction
-              title="Primary Score"
-              home={draft.primaryScoreHome}
-              away={draft.primaryScoreAway}
-              confidence={draft.primaryScoreConfidence}
-              result={draft.primaryScoreResult}
-              onHome={(v) => set("primaryScoreHome", v)}
-              onAway={(v) => set("primaryScoreAway", v)}
-              onConfidence={(v) => set("primaryScoreConfidence", v)}
-              onResult={(v) => set("primaryScoreResult", v)}
-            />
-            <ScorePrediction
-              title="Alt Score"
-              home={draft.altScoreHome}
-              away={draft.altScoreAway}
-              confidence={draft.altScoreConfidence}
-              result={draft.altScoreResult}
-              onHome={(v) => set("altScoreHome", v)}
-              onAway={(v) => set("altScoreAway", v)}
-              onConfidence={(v) => set("altScoreConfidence", v)}
-              onResult={(v) => set("altScoreResult", v)}
-            />
+            <ScorePrediction title="Primary Score" home={draft.primaryScoreHome} away={draft.primaryScoreAway} confidence={draft.primaryScoreConfidence} result={draft.primaryScoreResult} resultDisabled onHome={(v) => set("primaryScoreHome", v)} onAway={(v) => set("primaryScoreAway", v)} onConfidence={(v) => set("primaryScoreConfidence", v)} />
+            <ScorePrediction title="Alt Score" home={draft.altScoreHome} away={draft.altScoreAway} confidence={draft.altScoreConfidence} result={draft.altScoreResult} resultDisabled onHome={(v) => set("altScoreHome", v)} onAway={(v) => set("altScoreAway", v)} onConfidence={(v) => set("altScoreConfidence", v)} />
           </div>
         </EditorSection>
-        <EditorSection
-          title="4. Análisis"
-          description="Una sola explicación principal. La descripción corta pública se genera automáticamente desde este texto."
-        >
-          <Textarea
-            rows={8}
-            value={draft.analysis}
-            onChange={(event) => set("analysis", event.target.value)}
-            placeholder="Explica por qué el modelo llega a estas proyecciones…"
-          />
+
+        <EditorSection title="4. Análisis" description="Una sola explicación principal. La descripción corta pública se genera automáticamente desde este texto.">
+          <Textarea rows={8} value={draft.analysis} onChange={(event) => set("analysis", event.target.value)} placeholder="Explica por qué el modelo llega a estas proyecciones…" />
         </EditorSection>
-        <EditorSection
-          title="5. Seis factores"
-          description="Completa los seis factores. Los colores son parte del sistema visual y ya no se editan manualmente."
-        >
+
+        <EditorSection title="5. Seis factores" description="Completa los seis factores. Los colores son parte del sistema visual y ya no se editan manualmente.">
           <div className="grid gap-4 md:grid-cols-2">
             {draft.factors.map((factor, index) => (
-              <div
-                key={factor.title}
-                className="rounded-xl border border-border/70 bg-secondary/20 p-4"
-                style={{ borderLeft: `3px solid ${factor.color}` }}
-              >
+              <div key={factor.title} className="rounded-xl border border-border/70 bg-secondary/20 p-4" style={{ borderLeft: `3px solid ${factor.color}` }}>
                 <Label className="text-sm font-semibold">{factor.title}</Label>
-                <Textarea
-                  className="mt-2"
-                  rows={4}
-                  value={factor.text}
-                  onChange={(event) =>
-                    set(
-                      "factors",
-                      draft.factors.map((item, i) =>
-                        i === index ? { ...item, text: event.target.value } : item,
-                      ),
-                    )
-                  }
-                />
+                <Textarea className="mt-2" rows={4} value={factor.text} onChange={(event) => set("factors", draft.factors.map((item, i) => i === index ? { ...item, text: event.target.value } : item))} />
               </div>
             ))}
           </div>
         </EditorSection>
-        <EditorSection
-          title="6. Publicación"
-          description="Configura acceso y visibilidad sin mezclarlo con el contenido analítico."
-        >
+
+        <EditorSection title="6. Publicación" description="Configura acceso y visibilidad sin mezclarlo con el contenido analítico.">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Acceso">
-              <Select
-                value={draft.visibility}
-                onValueChange={(value) => set("visibility", value as Draft["visibility"])}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="free">Acceso libre</SelectItem>
-                  <SelectItem value="premium">Premium</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Plan mínimo">
-              <Input
-                type="number"
-                min={0}
-                max={3}
-                disabled={draft.visibility === "free"}
-                value={draft.visibility === "free" ? 0 : draft.minPlanTier}
-                onChange={(event) => set("minPlanTier", Number(event.target.value))}
-              />
-            </Field>
-            <Field label="Precio individual (centavos MXN)">
-              <Input
-                type="number"
-                min={0}
-                value={draft.priceCents}
-                onChange={(event) => set("priceCents", Number(event.target.value))}
-              />
-            </Field>
-            <Field label="Etiquetas">
-              <Input
-                value={draft.tags}
-                onChange={(event) => set("tags", event.target.value)}
-                placeholder="champions, value, goles"
-              />
-            </Field>
+            <Field label="Acceso"><Select value={draft.visibility} onValueChange={(value) => set("visibility", value as Draft["visibility"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="free">Acceso libre</SelectItem><SelectItem value="premium">Premium</SelectItem></SelectContent></Select></Field>
+            <Field label="Plan mínimo"><Input type="number" min={0} max={3} disabled={draft.visibility === "free"} value={draft.visibility === "free" ? 0 : draft.minPlanTier} onChange={(event) => set("minPlanTier", Number(event.target.value))} /></Field>
+            <Field label="Precio individual (centavos MXN)"><Input type="number" min={0} value={draft.priceCents} onChange={(event) => set("priceCents", Number(event.target.value))} /></Field>
+            <Field label="Etiquetas"><Input value={draft.tags} onChange={(event) => set("tags", event.target.value)} placeholder="champions, value, goles" /></Field>
           </div>
           <div className="mt-4 flex flex-wrap gap-5">
-            <CheckField
-              label="Publicado"
-              checked={draft.isPublished}
-              onChange={(v) => set("isPublished", v)}
-            />
-            <CheckField
-              label="Destacado"
-              checked={draft.featured}
-              onChange={(v) => set("featured", v)}
-            />
-            <CheckField
-              label="Recomendado"
-              checked={draft.recommended}
-              onChange={(v) => set("recommended", v)}
-            />
+            <CheckField label="Publicado" checked={draft.isPublished} onChange={(v) => set("isPublished", v)} />
+            <CheckField label="Destacado" checked={draft.featured} onChange={(v) => set("featured", v)} />
+            <CheckField label="Recomendado" checked={draft.recommended} onChange={(v) => set("recommended", v)} />
           </div>
         </EditorSection>
+
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => navigate({ to: "/admin" })}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={save}
-            disabled={busy}
-            className="min-w-40 bg-gradient-brand text-primary-foreground"
-          >
-            <Save className="size-4" />{" "}
-            {busy ? "Guardando…" : pick ? "Guardar cambios" : "Crear pick"}
+          <Button variant="secondary" onClick={() => navigate({ to: "/admin" })}>Cancelar</Button>
+          <Button onClick={save} disabled={busy} className="min-w-40 bg-gradient-brand text-primary-foreground">
+            <Save className="size-4" /> {busy ? "Guardando…" : pick ? "Guardar cambios" : "Crear pick"}
           </Button>
         </div>
       </div>
+
       <aside className="xl:sticky xl:top-6 xl:self-start">
         <div className="surface-card rounded-2xl border border-border/70 p-5">
           <p className="eyebrow">Preview del partido</p>
           <div className="mt-5 flex items-center gap-3">
             <TeamPreview team={selectedHome} fallback="Local" />
             <div className="shrink-0 text-center">
-              <p className="font-display text-2xl font-extrabold">
-                {draft.homeScore || 0} - {draft.awayScore || 0}
-              </p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                {EVENT_STATE_LABEL[draft.eventState as keyof typeof EVENT_STATE_LABEL] ??
-                  draft.eventState}
-              </p>
+              <p className="font-display text-2xl font-extrabold">{draft.homeScore || 0} - {draft.awayScore || 0}</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{EVENT_STATE_LABEL[draft.eventState]}</p>
             </div>
             <TeamPreview team={selectedAway} fallback="Visitante" />
           </div>
           <div className="mt-5 rounded-xl bg-secondary/40 p-4">
-            <p className="text-xs text-muted-foreground">
-              {selectedLeague?.name ?? "Selecciona una liga"}
-            </p>
+            <p className="text-xs text-muted-foreground">{selectedLeague?.name ?? "Selecciona una liga"}</p>
             <p className="mt-2 text-sm font-semibold">Primary Pick</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {draft.primarySelection || "Sin selección"}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{draft.primarySelection || "Sin selección"}</p>
             <p className="mt-3 text-sm font-semibold">Secondary Pick</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {draft.secondarySelection || "Sin selección"}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{draft.secondarySelection || "Sin selección"}</p>
           </div>
           <div className="mt-4 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-muted-foreground">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-            <p>
-              Primary Score y Alt Score son proyecciones analíticas. No muestran cuota ni etiqueta
-              de riesgo.
-            </p>
+            <p>Primary Score y Alt Score son proyecciones analíticas. No muestran cuota ni etiqueta de riesgo.</p>
           </div>
         </div>
       </aside>
@@ -785,315 +659,74 @@ export function PickEditor({ pick }: { pick?: StructuredPick }) {
   );
 }
 
-function EditorSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="surface-card rounded-2xl border border-border/70 p-5 sm:p-6">
-      <div className="mb-5">
-        <h2 className="font-display text-lg font-bold">{title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      {children}
-    </section>
-  );
+function EditorSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  return <section className="surface-card rounded-2xl border border-border/70 p-5 sm:p-6"><div className="mb-5"><h2 className="font-display text-lg font-bold">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>{children}</section>;
 }
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="mt-1">{children}</div>
-      {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return <div><Label className="text-xs text-muted-foreground">{label}</Label><div className="mt-1">{children}</div>{hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}</div>;
 }
-function CheckField({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-sm">
-      <Checkbox checked={checked} onCheckedChange={(value) => onChange(Boolean(value))} /> {label}
-    </label>
-  );
+
+function CheckField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return <label className="flex items-center gap-2 text-sm"><Checkbox checked={checked} onCheckedChange={(value) => onChange(Boolean(value))} /> {label}</label>;
 }
-function EntityPicker<T extends { id: string }>({
-  label,
-  placeholder,
-  value,
-  options,
-  getLabel,
-  image,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  placeholder: string;
-  value: string;
-  options: T[];
-  getLabel: (item: T) => string;
-  image?: (item: T) => string | null;
-  onChange: (id: string) => void;
-  disabled?: boolean;
-}) {
+
+function EntityPicker<T extends { id: string }>({ label, placeholder, value, options, getLabel, image, onChange, disabled }: { label: string; placeholder: string; value: string; options: T[]; getLabel: (item: T) => string; image?: (item: T) => string | null; onChange: (id: string) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((item) => item.id === value);
   return (
     <Field label={label}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            role="combobox"
-            disabled={disabled}
-            className="w-full justify-between font-normal"
-          >
-            {selected ? getLabel(selected) : placeholder}
-            <ChevronsUpDown className="size-4 opacity-50" />
+          <Button type="button" variant="outline" role="combobox" disabled={disabled} className="w-full justify-between font-normal">
+            {selected ? getLabel(selected) : placeholder}<ChevronsUpDown className="size-4 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
-          <Command>
-            <CommandInput placeholder={placeholder} />
-            <CommandList>
-              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-              <CommandGroup>
-                {options.map((item) => (
-                  <CommandItem
-                    key={item.id}
-                    value={`${getLabel(item)} ${item.id}`}
-                    onSelect={() => {
-                      onChange(item.id);
-                      setOpen(false);
-                    }}
-                  >
-                    {image?.(item) ? (
-                      <img src={image(item)!} alt="" className="size-5 object-contain" />
-                    ) : (
-                      <span className="grid size-5 place-items-center rounded-full bg-secondary text-[9px] font-bold">
-                        {getLabel(item).slice(0, 2).toUpperCase()}
-                      </span>
-                    )}
-                    <span className="flex-1">{getLabel(item)}</span>
-                    <Check
-                      className={cn("size-4", value === item.id ? "opacity-100" : "opacity-0")}
-                    />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
+          <Command><CommandInput placeholder={placeholder} /><CommandList><CommandEmpty>No se encontraron resultados.</CommandEmpty><CommandGroup>{options.map((item) => (
+            <CommandItem key={item.id} value={`${getLabel(item)} ${item.id}`} onSelect={() => { onChange(item.id); setOpen(false); }}>
+              {image?.(item) ? <img src={image(item)!} alt="" className="size-5 object-contain" /> : <span className="grid size-5 place-items-center rounded-full bg-secondary text-[9px] font-bold">{getLabel(item).slice(0, 2).toUpperCase()}</span>}
+              <span className="flex-1">{getLabel(item)}</span><Check className={cn("size-4", value === item.id ? "opacity-100" : "opacity-0")} />
+            </CommandItem>
+          ))}</CommandGroup></CommandList></Command>
         </PopoverContent>
       </Popover>
     </Field>
   );
 }
-function BetPrediction({
-  title,
-  market,
-  selection,
-  risk,
-  confidence,
-  odds,
-  result,
-  onMarket,
-  onSelection,
-  onRisk,
-  onConfidence,
-  onOdds,
-  onResult,
-}: {
-  title: string;
-  market: PickType;
-  selection: string;
-  risk: RiskLevel;
-  confidence: string;
-  odds: string;
-  result: PickStatus;
-  onMarket: (v: PickType) => void;
-  onSelection: (v: string) => void;
-  onRisk: (v: RiskLevel) => void;
-  onConfidence: (v: string) => void;
-  onOdds: (v: string) => void;
-  onResult: (v: PickStatus) => void;
-}) {
+
+function BetPrediction({ title, market, selection, risk, confidence, odds, result, resultDisabled, onMarket, onSelection, onRisk, onConfidence, onOdds, onResult }: { title: string; market: PickType; selection: string; risk: RiskLevel; confidence: string; odds: string; result: PickStatus; resultDisabled?: boolean; onMarket: (v: PickType) => void; onSelection: (v: string) => void; onRisk: (v: RiskLevel) => void; onConfidence: (v: string) => void; onOdds: (v: string) => void; onResult: (v: PickStatus) => void }) {
   return (
     <div className="rounded-xl border border-border/70 bg-secondary/20 p-4">
       <p className="font-display font-bold">{title}</p>
       <div className="mt-4 space-y-3">
-        <Field label="Mercado">
-          <Select value={market} onValueChange={(v) => onMarket(v as PickType)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MARKET_OPTIONS.map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Selección">
-          <Input
-            value={selection}
-            onChange={(e) => onSelection(e.target.value)}
-            placeholder="Ej. Manchester City gana"
-          />
-        </Field>
+        <Field label="Mercado"><Select value={market} onValueChange={(v) => onMarket(v as PickType)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></Field>
+        <Field label="Selección"><Input value={selection} onChange={(e) => onSelection(e.target.value)} placeholder="Ej. Manchester City gana" /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Riesgo">
-            <Select value={risk} onValueChange={(v) => onRisk(v as RiskLevel)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(RISK_LABEL).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Confianza %">
-            <Input
-              type="number"
-              min={0}
-              max={100}
-              value={confidence}
-              onChange={(e) => onConfidence(e.target.value)}
-            />
-          </Field>
-          <Field label="Cuota">
-            <Input
-              type="number"
-              min={1.01}
-              step="0.01"
-              value={odds}
-              onChange={(e) => onOdds(e.target.value)}
-            />
-          </Field>
-          <Field label="Resultado">
-            <Select value={result} onValueChange={(v) => onResult(v as PickStatus)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(STATUS_LABEL).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          <Field label="Riesgo"><Select value={risk} onValueChange={(v) => onRisk(v as RiskLevel)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(RISK_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></Field>
+          <Field label="Confianza %"><Input type="number" min={0} max={100} value={confidence} onChange={(e) => onConfidence(e.target.value)} /></Field>
+          <Field label="Cuota"><Input type="number" min={1.01} step="0.01" value={odds} onChange={(e) => onOdds(e.target.value)} /></Field>
+          <Field label="Resultado"><Select value={result} disabled={resultDisabled} onValueChange={(v) => onResult(v as PickStatus)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(STATUS_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></Field>
         </div>
       </div>
     </div>
   );
 }
-function ScorePrediction({
-  title,
-  home,
-  away,
-  confidence,
-  result,
-  onHome,
-  onAway,
-  onConfidence,
-  onResult,
-}: {
-  title: string;
-  home: string;
-  away: string;
-  confidence: string;
-  result: PickStatus;
-  onHome: (v: string) => void;
-  onAway: (v: string) => void;
-  onConfidence: (v: string) => void;
-  onResult: (v: PickStatus) => void;
-}) {
+
+function ScorePrediction({ title, home, away, confidence, result, resultDisabled, onHome, onAway, onConfidence }: { title: string; home: string; away: string; confidence: string; result: PickStatus; resultDisabled?: boolean; onHome: (v: string) => void; onAway: (v: string) => void; onConfidence: (v: string) => void }) {
   return (
     <div className="rounded-xl border border-border/70 bg-secondary/20 p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-display font-bold">{title}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Proyección analítica · sin riesgo · sin cuota
-          </p>
-        </div>
-        <Select value={result} onValueChange={(v) => onResult(v as PickStatus)}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(STATUS_LABEL).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div><p className="font-display font-bold">{title}</p><p className="mt-1 text-[11px] text-muted-foreground">Proyección analítica · sin riesgo · sin cuota</p></div>
+        <Select value={result} disabled={resultDisabled}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(STATUS_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
       </div>
-      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-end gap-3">
-        <Field label="Local">
-          <Input type="number" min={0} value={home} onChange={(e) => onHome(e.target.value)} />
-        </Field>
-        <span className="pb-2 font-display text-xl font-bold">-</span>
-        <Field label="Visitante">
-          <Input type="number" min={0} value={away} onChange={(e) => onAway(e.target.value)} />
-        </Field>
-      </div>
-      <div className="mt-3">
-        <Field label="Confianza del modelo %">
-          <Input
-            type="number"
-            min={0}
-            max={100}
-            value={confidence}
-            onChange={(e) => onConfidence(e.target.value)}
-          />
-        </Field>
-      </div>
+      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-end gap-3"><Field label="Local"><Input type="number" min={0} value={home} onChange={(e) => onHome(e.target.value)} /></Field><span className="pb-2 font-display text-xl font-bold">-</span><Field label="Visitante"><Input type="number" min={0} value={away} onChange={(e) => onAway(e.target.value)} /></Field></div>
+      <div className="mt-3"><Field label="Confianza del modelo %"><Input type="number" min={0} max={100} value={confidence} onChange={(e) => onConfidence(e.target.value)} /></Field></div>
     </div>
   );
 }
+
 function TeamPreview({ team, fallback }: { team: Team | null; fallback: string }) {
   const name = team?.name ?? fallback;
-  return (
-    <div className="min-w-0 flex-1 text-center">
-      <div className="mx-auto grid size-14 place-items-center overflow-hidden rounded-full border border-border bg-background">
-        {team?.logo_url ? (
-          <img src={team.logo_url} alt="" className="size-10 object-contain" />
-        ) : (
-          <span className="font-display text-sm font-bold text-muted-foreground">
-            {name.slice(0, 2).toUpperCase()}
-          </span>
-        )}
-      </div>
-      <p className="mt-2 truncate text-sm font-semibold">{name}</p>
-    </div>
-  );
+  return <div className="min-w-0 flex-1 text-center"><div className="mx-auto grid size-14 place-items-center overflow-hidden rounded-full border border-border bg-background">{team?.logo_url ? <img src={team.logo_url} alt="" className="size-10 object-contain" /> : <span className="font-display text-sm font-bold text-muted-foreground">{name.slice(0, 2).toUpperCase()}</span>}</div><p className="mt-2 truncate text-sm font-semibold">{name}</p></div>;
 }
