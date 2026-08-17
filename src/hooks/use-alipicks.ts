@@ -82,11 +82,26 @@ export function useStructuredPick(id: string) {
   });
 }
 
+/** Active leagues for public/admin pick selection. */
 export function useLeagues(sport?: string) {
   return useQuery({
-    queryKey: ["leagues", sport ?? "all"],
+    queryKey: ["leagues", "active", sport ?? "all"],
     queryFn: async (): Promise<League[]> => {
       let query = supabase.from("leagues").select("*").eq("is_active", true).order("name");
+      if (sport) query = query.eq("sport", sport as League["sport"]);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Full catalog for league/team administration, including inactive leagues. */
+export function useAdminLeagues(sport?: string) {
+  return useQuery({
+    queryKey: ["leagues", "admin", sport ?? "all"],
+    queryFn: async (): Promise<League[]> => {
+      let query = supabase.from("leagues").select("*").order("name");
       if (sport) query = query.eq("sport", sport as League["sport"]);
       const { data, error } = await query;
       if (error) throw error;
@@ -102,9 +117,10 @@ export function useLeagueTeams(leagueId?: string) {
     queryFn: async (): Promise<Team[]> => {
       const { data, error } = await supabase
         .from("league_teams")
-        .select("team:teams(*)")
+        .select("team:teams!inner(*)")
         .eq("league_id", leagueId!)
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .eq("team.is_active", true);
       if (error) throw error;
       return (data ?? []).map((row) => row.team).filter((team): team is Team => Boolean(team));
     },
