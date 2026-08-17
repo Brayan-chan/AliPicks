@@ -46,9 +46,9 @@ export type StructuredPick = Pick & {
   away_team_id?: string | null;
   home_score?: number | null;
   away_score?: number | null;
-  league: League | null;
-  home_team: Team | null;
-  away_team: Team | null;
+  league_ref: League | null;
+  home_team_ref: Team | null;
+  away_team_ref: Team | null;
   predictions: PickPrediction[];
 };
 
@@ -57,15 +57,15 @@ export function getPrediction(pick: StructuredPick, kind: PredictionKind) {
 }
 
 export function getLeagueName(pick: StructuredPick) {
-  return pick.league?.name || (typeof pick.league === "string" ? pick.league : "Liga");
+  return pick.league_ref?.name || pick.league || "Liga";
 }
 
 export function getMatchTeams(pick: StructuredPick) {
-  if (pick.home_team && pick.away_team) {
+  if (pick.home_team_ref && pick.away_team_ref) {
     return {
-      home: pick.home_team,
-      away: pick.away_team,
-      label: `${pick.home_team.name} vs ${pick.away_team.name}`,
+      home: pick.home_team_ref,
+      away: pick.away_team_ref,
+      label: `${pick.home_team_ref.name} vs ${pick.away_team_ref.name}`,
     };
   }
 
