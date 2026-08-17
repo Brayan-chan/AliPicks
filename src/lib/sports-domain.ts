@@ -6,12 +6,28 @@ export type League = Tables<"leagues">;
 export type Team = Tables<"teams">;
 export type PickPrediction = Tables<"pick_predictions">;
 
-export type StructuredPick = Pick & {
-  league_ref: League | null;
-  home_team_ref: Team | null;
-  away_team_ref: Team | null;
-  predictions: PickPrediction[];
+/**
+ * Lifecycle fields introduced by the postponement/rescheduling migrations.
+ *
+ * These live in the domain type explicitly so the frontend remains aligned with
+ * the committed SQL migrations even if generated Supabase types were produced
+ * from a local database that had not yet applied the latest migration set.
+ * Once types.ts is regenerated from a fully migrated schema these properties
+ * will be structurally identical and this intersection remains harmless.
+ */
+export type PickLifecycleFields = {
+  postponement_reason: string | null;
+  postponed_at: string | null;
+  rescheduled_for: string | null;
 };
+
+export type StructuredPick = Pick &
+  PickLifecycleFields & {
+    league_ref: League | null;
+    home_team_ref: Team | null;
+    away_team_ref: Team | null;
+    predictions: PickPrediction[];
+  };
 
 export function getPrediction(pick: StructuredPick, kind: PredictionKind) {
   return pick.predictions?.find((prediction) => prediction.kind === kind) ?? null;
