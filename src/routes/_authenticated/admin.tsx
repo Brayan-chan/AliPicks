@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +44,8 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminPage() {
   const { user } = useSession();
   const { data: account, isLoading } = useMyAccount(user?.id);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+
   if (isLoading)
     return (
       <Layout>
@@ -61,6 +63,9 @@ function AdminPage() {
         </div>
       </Layout>
     );
+
+  if (pathname !== "/admin") return <Outlet />;
+
   return (
     <Layout>
       <div className="mx-auto max-w-6xl px-4 py-10">
