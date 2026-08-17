@@ -5,11 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ExtraTab, Pick, Plan, Purchase, Subscription } from "@/lib/alipicks";
 import type { League, StructuredPick, Team } from "@/lib/sports-domain";
 
-// The sports-domain migrations live ahead of the generated Supabase types during
-// this transition. Keep the escape hatch isolated here; regenerate types after
-// applying the migrations and remove this alias then.
-const sportsDb = supabase as any;
-
 export function useSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,14 +35,13 @@ export function usePicks() {
   });
 }
 
-/** New sports-domain query. Legacy usePicks stays intact until the public UI migration is complete. */
 export function useStructuredPicks() {
   return useQuery({
     queryKey: ["picks", "structured"],
     queryFn: async (): Promise<StructuredPick[]> => {
-      const { data, error } = await sportsDb.from("picks").select(STRUCTURED_PICK_SELECT).order("event_at", { ascending: true });
+      const { data, error } = await supabase.from("picks").select(STRUCTURED_PICK_SELECT).order("event_at", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as StructuredPick[];
+      return (data ?? []) as unknown as StructuredPick[];
     },
   });
 }
@@ -68,9 +62,9 @@ export function useStructuredPick(id: string) {
     queryKey: ["pick", id, "structured"],
     enabled: Boolean(id),
     queryFn: async (): Promise<StructuredPick | null> => {
-      const { data, error } = await sportsDb.from("picks").select(STRUCTURED_PICK_SELECT).eq("id", id).maybeSingle();
+      const { data, error } = await supabase.from("picks").select(STRUCTURED_PICK_SELECT).eq("id", id).maybeSingle();
       if (error) throw error;
-      return data as StructuredPick | null;
+      return data as unknown as StructuredPick | null;
     },
   });
 }
@@ -79,11 +73,11 @@ export function useLeagues(sport?: string) {
   return useQuery({
     queryKey: ["leagues", sport ?? "all"],
     queryFn: async (): Promise<League[]> => {
-      let query = sportsDb.from("leagues").select("*").eq("is_active", true).order("name");
-      if (sport) query = query.eq("sport", sport);
+      let query = supabase.from("leagues").select("*").eq("is_active", true).order("name");
+      if (sport) query = query.eq("sport", sport as League["sport"]);
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as League[];
+      return data ?? [];
     },
   });
 }
@@ -93,9 +87,15 @@ export function useLeagueTeams(leagueId?: string) {
     queryKey: ["league-teams", leagueId],
     enabled: Boolean(leagueId),
     queryFn: async (): Promise<Team[]> => {
-      const { data, error } = await sportsDb.from("league_teams").select("team:teams(*)").eq("league_id", leagueId!).eq("is_active", true);
+      const { data, error } = await supabase
+        .from("league_teams")
+        .select("team:teams(*)")
+        .eq("league_id", leagueId!)
+        .eq("is_active", true);
       if (error) throw error;
-      return (data ?? []).map((row: { team: Team | null }) => row.team).filter((team: Team | null): team is Team => Boolean(team));
+      return (data ?? [])
+        .map((row) => row.team)
+        .filter((team): team is Team => Boolean(team));
     },
   });
 }
