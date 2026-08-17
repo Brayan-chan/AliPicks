@@ -250,7 +250,10 @@ select lives_ok(
     set event_state = 'postponed',
         home_score = null,
         away_score = null,
-        final_result = null
+        final_result = null,
+        postponement_reason = 'Suspended during lifecycle test',
+        postponed_at = now(),
+        rescheduled_for = now() + interval '7 days'
     where id = '30000000-0000-0000-0000-000000000001'
   $$,
   'live match may be suspended and represented as postponed'
@@ -268,7 +271,10 @@ select lives_ok(
   $$
     update public.picks
     set event_state = 'upcoming',
-        event_at = now() + interval '7 days'
+        event_at = rescheduled_for,
+        postponement_reason = null,
+        postponed_at = null,
+        rescheduled_for = null
     where id = '30000000-0000-0000-0000-000000000001'
   $$,
   'persisted postponed match may be reprogrammed as upcoming'
